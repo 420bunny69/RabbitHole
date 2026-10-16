@@ -1,0 +1,69 @@
+rabbithole/
+├── README.md
+├── .gitignore
+├── docker-compose.yml          # optional: local Postgres only
+├── backend/
+│   ├── .env.example
+│   ├── requirements.txt
+│   ├── alembic.ini
+│   ├── alembic/versions/
+│   ├── app/
+│   │   ├── main.py             # app factory, CORS, router mounting
+│   │   ├── config.py           # settings from env vars
+│   │   ├── database.py         # engine, session
+│   │   ├── models.py           # SQLAlchemy models
+│   │   ├── schemas.py          # Pydantic request/response + AI output schemas
+│   │   ├── deps.py             # owner_id dependency, db session
+│   │   ├── routers/
+│   │   │   ├── items.py
+│   │   │   ├── graph.py
+│   │   │   └── related.py
+│   │   ├── services/
+│   │   │   ├── pipeline.py     # orchestrates extract → analyze → store
+│   │   │   ├── extractors/
+│   │   │   │   ├── base.py
+│   │   │   │   ├── web.py      # trafilatura / readability
+│   │   │   │   ├── youtube.py  # transcript + metadata
+│   │   │   │   ├── github.py   # repo README + metadata via GitHub API
+│   │   │   │   └── text.py
+│   │   │   ├── llm/
+│   │   │   │   ├── base.py     # LLMProvider interface
+│   │   │   │   ├── hosted.py
+│   │   │   │   ├── ollama.py
+│   │   │   │   └── prompts.py
+│   │   │   ├── analyzer.py     # summary + concepts, validated
+│   │   │   ├── graph_builder.py
+│   │   │   └── related_finder.py
+│   │   └── utils/
+│   │       └── url_safety.py   # SSRF guard
+│   └── tests/
+│       ├── conftest.py
+│       ├── test_url_safety.py
+│       ├── test_extractors.py
+│       ├── test_analyzer.py    # LLM mocked
+│       └── test_items_api.py
+└── frontend/
+    ├── .env.example
+    ├── package.json
+    ├── vite.config.ts
+    ├── tailwind.config.ts
+    └── src/
+        ├── main.tsx
+        ├── App.tsx
+        ├── api/client.ts       # fetch wrapper, adds owner header
+        ├── types/index.ts
+        ├── hooks/              # useItems, useGraph, usePolling
+        ├── components/
+        │   ├── AddItemForm.tsx
+        │   ├── ItemCard.tsx
+        │   ├── ItemDetail.tsx
+        │   ├── ConceptChips.tsx
+        │   ├── RelatedList.tsx
+        │   └── graph/
+        │       ├── KnowledgeGraph.tsx
+        │       ├── ItemNode.tsx
+        │       └── ConceptNode.tsx
+        └── pages/
+            ├── Library.tsx
+            ├── ItemPage.tsx
+            └── GraphPage.tsx

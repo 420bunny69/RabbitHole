@@ -6,7 +6,8 @@ and make OUR server read internal data for them. This module decides whether a U
 
 Known limitation: DNS is resolved here and again when the page is actually downloaded, so a
 hostile DNS server could answer differently the second time ("DNS rebinding"). The fetcher
-(added with the web extractor) must re-check every redirect and should connect to the checked IP.
+(app/services/fetcher.py) re-checks every redirect hop, but does NOT yet connect to the checked
+IP, so this small window remains. Pinning the connection to the checked IP is future hardening.
 """
 
 import ipaddress
