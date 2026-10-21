@@ -1,0 +1,100 @@
+@import 'tailwindcss';
+
+/*
+  Colour tokens. The page is a cool sage "paper" with deep spruce ink and one violet accent.
+  The dark theme follows the visitor's system setting, so only the variable values change.
+*/
+:root {
+  --paper: #e7ede4;
+  --panel: #f4f7f1;
+  --ink: #15231f;
+  --ink-soft: #52635c;
+  --rule: #b7c4bb;
+  --burrow: #1d3b34;
+  --accent: #5a3fd6;
+  --accent-soft: #e2dcf8;
+  --on-accent: #ffffff;
+  --danger: #b0372d;
+  --danger-soft: #f6dcd8;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0e1916;
+    --panel: #15241f;
+    --ink: #e3ece6;
+    --ink-soft: #94a89f;
+    --rule: #2c4139;
+    --burrow: #6fb3a0;
+    --accent: #a898ff;
+    --accent-soft: #2a2450;
+    --on-accent: #140f2e;
+    --danger: #ff8e82;
+    --danger-soft: #3c1f1c;
+  }
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-panel: var(--panel);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-rule: var(--rule);
+  --color-burrow: var(--burrow);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+}
+
+@theme {
+  --font-display: 'Bricolage Grotesque Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-reading: 'Source Serif 4 Variable', ui-serif, Georgia, serif;
+
+  /* A ring that spreads outwards from a node while an item is being processed. */
+  --animate-pulse-ring: pulse-ring 1.6s ease-out infinite;
+  /* A node that lands when an item finishes. Plays once, only in response to that change. */
+  --animate-settle: settle 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+
+  @keyframes pulse-ring {
+    from {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent);
+    }
+    to {
+      box-shadow: 0 0 0 9px transparent;
+    }
+  }
+
+  @keyframes settle {
+    from {
+      transform: scale(1.9);
+    }
+    to {
+      transform: scale(1);
+    }
+  }
+}
+
+html {
+  color-scheme: light dark;
+  background-color: var(--paper);
+}
+
+body {
+  margin: 0;
+  background-color: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+::selection {
+  background-color: var(--accent-soft);
+  color: var(--ink);
+}

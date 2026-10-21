@@ -3,7 +3,8 @@
 AI-powered personal knowledge discovery. Save articles, YouTube videos, blogs and GitHub repos,
 get summaries and key concepts, and explore connections in an interactive knowledge graph.
 
-**Status:** Day 1 in progress (backend: saving items, text extraction, AI summaries and concepts).
+**Status:** Day 2 in progress. Backend: saving items, text extraction, AI summaries and concepts.
+Frontend: library, add form and item pages. Next: YouTube and GitHub extractors, then the knowledge graph.
 
 ## Run the backend (Windows PowerShell)
 
@@ -21,6 +22,20 @@ Then open http://127.0.0.1:8000/api/health and http://127.0.0.1:8000/docs.
 
 `alembic upgrade head` creates the database tables (a file called `rabbithole.db` in `backend/`).
 Run it again whenever a new migration is added.
+
+## Run the frontend (Windows PowerShell)
+
+Needs Node.js 20.19 or newer, or 22.12 or newer (check with `node -v`; install the LTS version from
+https://nodejs.org if yours is older). Keep the backend running in its own terminal, then:
+
+```powershell
+cd rabbithole\frontend
+npm install
+npm run dev
+```
+
+Open http://localhost:5173. While developing, Vite forwards `/api` requests to the backend on port 8000,
+so there is no CORS setup. Other commands: `npm test` (tests), `npm run build` (type-check and production build).
 
 ## Set up the AI
 
