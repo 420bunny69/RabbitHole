@@ -51,6 +51,23 @@ class ItemOut(BaseModel):
         return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
+MAX_LIST_CONCEPTS = 5
+
+
+class ItemSummary(ItemOut):
+    """An item as shown in the library list: includes its most relevant concept names."""
+
+    concepts: list[str] = []
+
+    @classmethod
+    def from_item(cls, item: Item) -> "ItemSummary":
+        links = sorted(item.concept_links, key=lambda link: -link.relevance)[:MAX_LIST_CONCEPTS]
+        return cls(
+            **ItemOut.model_validate(item).model_dump(),
+            concepts=[link.concept.name for link in links],
+        )
+
+
 class ConceptRef(BaseModel):
     name: str
     relevance: float

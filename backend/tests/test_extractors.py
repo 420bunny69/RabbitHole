@@ -66,6 +66,12 @@ def test_long_first_line_is_shortened():
     assert len(title) <= 80 and title.endswith("…")
 
 
+def test_long_titles_end_on_a_whole_word():
+    title = derive_title("Gradient descent finds the minimum of a function by following the slope downhill forever")
+    assert title == "Gradient descent finds the minimum of a function by following the slope…"
+    assert derive_title("x" * 200) == "x" * 79 + "…"  # one endless word still gets cut
+
+
 def test_empty_text_is_rejected():
     with pytest.raises(ExtractionError):
         extract_text("   \n  ")

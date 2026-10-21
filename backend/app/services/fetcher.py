@@ -4,17 +4,20 @@ from dataclasses import dataclass
 from urllib.parse import urljoin
 
 import httpx
-
+from app.config import get_settings
 from app.utils.url_safety import validate_public_url
 
 MAX_BYTES = 2_000_000  # 2 MB, measured after decompression
 MAX_REDIRECTS = 5
 TIMEOUT = httpx.Timeout(10.0, connect=5.0)
 ALLOWED_CONTENT_TYPES = {"text/html", "application/xhtml+xml", "text/plain"}
-HEADERS = {
-    "User-Agent": "RabbitHoleBot/0.1 (personal knowledge tool)",
-    "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9",
-}
+def build_headers() -> dict[str, str]:
+    """Identify ourselves the way Wikimedia and other sites ask: tool/version (contact)."""
+    contact = get_settings().fetch_contact.strip() or "personal knowledge tool"
+    return {
+        "User-Agent": f"RabbitHoleBot/0.1 ({contact})",
+        "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9",
+    }
 
 
 class FetchError(Exception):
@@ -39,7 +42,7 @@ def fetch_page(url: str, *, transport: httpx.BaseTransport | None = None) -> Fet
     current = validate_public_url(url)
     try:
         with httpx.Client(
-            transport=transport, timeout=TIMEOUT, headers=HEADERS, follow_redirects=False
+            transport=transport, timeout=TIMEOUT,transport=transport, timeout=TIMEOUT, headers=build_headers(), follow_redirects=False, follow_redirects=False
         ) as client:
             for _ in range(MAX_REDIRECTS + 1):
                 with client.stream("GET", current) as response:
@@ -58,9 +61,12 @@ def fetch_page(url: str, *, transport: httpx.BaseTransport | None = None) -> Fet
 
 
 def _read_body(response: httpx.Response) -> bytes:
+        if response.status_code in (401, 403, 429):
+        raise FetchError(
+            f"The website blocked automated access ({response.status_code}). Try pasting the text instead"
+        )
     if response.status_code >= 400:
         raise FetchError(f"The website returned an error ({response.status_code})")
-
     content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
     if content_type and content_type not in ALLOWED_CONTENT_TYPES:
         raise FetchError("That link is not a web page (it looks like a file or media)")

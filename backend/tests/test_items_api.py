@@ -33,6 +33,12 @@ def test_saving_pasted_text_is_processed_in_the_background(client, owner):
     assert item["raw_text"] == PASTED
 
 
+def test_pasted_text_has_its_title_in_the_very_first_response(client, owner):
+    created = client.post("/api/items", json={"text": PASTED}, headers=owner).json()
+    assert created["status"] == "pending"
+    assert created["title"] == "Entropy measures disorder in a system."  # no "Pasted text" flash
+
+
 def test_saving_a_url_extracts_the_article(client, owner, fake_web):
     response = client.post("/api/items", json={"url": "https://example.com/gd#intro"}, headers=owner)
     assert response.status_code == 201

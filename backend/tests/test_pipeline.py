@@ -55,6 +55,21 @@ def test_a_ready_item_has_a_summary_and_concepts_most_relevant_first(client, own
     ]
 
 
+def test_the_list_includes_each_items_concept_names(client, owner):
+    client.post("/api/items", json={"text": PASTED}, headers=owner)
+    listed = client.get("/api/items", headers=owner).json()
+    assert listed[0]["concepts"] == ["entropy", "shared idea"]  # most relevant first
+
+
+def test_the_list_shows_no_concepts_for_an_item_that_has_none_yet(client, owner, monkeypatch):
+    def busy(title, text):
+        raise LLMError(BUSY)
+
+    monkeypatch.setattr(pipeline, "analyze_text", busy)
+    client.post("/api/items", json={"text": PASTED}, headers=owner)
+    assert client.get("/api/items", headers=owner).json()[0]["concepts"] == []
+
+
 def test_items_of_the_same_visitor_share_concept_rows(client, owner):
     client.post("/api/items", json={"text": PASTED}, headers=owner)
     client.post("/api/items", json={"text": "Gradient descent finds minima of a function."}, headers=owner)

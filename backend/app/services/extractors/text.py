@@ -8,7 +8,10 @@ def derive_title(text: str, max_len: int = 80) -> str:
         return "Pasted text"
     if len(first_line) <= max_len:
         return first_line
-    return first_line[: max_len - 1].rstrip() + "…"
+    cut = first_line[: max_len - 1]
+    if " " in cut:  # end on a whole word instead of cutting one in half
+        cut = cut.rsplit(" ", 1)[0]
+    return cut.rstrip(" ,;:-") + "…"
 
 
 def extract_text(text: str, title: str | None = None) -> ExtractedContent:

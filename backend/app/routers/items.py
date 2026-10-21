@@ -3,12 +3,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
 from app.deps import OwnerId
-from app.models import Item, ItemStatus, SourceType
-from app.schemas import ItemCreate, ItemDetail, ItemOut
+from app.models import Item, ItemConcept, ItemStatus, SourceType
+from app.schemas import ItemCreate, ItemDetail, ItemOut, ItemSummary
+from app.services.extractors.text import derive_title
 from app.services.pipeline import process_item
 from app.services.sources import detect_source_type
 from app.utils.url_safety import UnsafeURLError, validate_public_url
@@ -53,7 +54,7 @@ def create_item(
         item = Item(
             owner_id=owner_id,
             raw_text=payload.text,
-            title=payload.title,
+            title=payload.title or derive_title(payload.text),  # known now, so the UI never flickers
             source_type=SourceType.TEXT.value,
         )
 
@@ -63,7 +64,7 @@ def create_item(
     return item
 
 
-@router.get("", response_model=list[ItemOut])
+@router.get("", response_model=list[ItemSummary])
 def list_items(
     owner_id: OwnerId,
     db: DB,
@@ -82,8 +83,13 @@ def list_items(
                 )
             )
         )
-    stmt = stmt.order_by(Item.created_at.desc(), Item.id).limit(limit).offset(offset)
-    return db.scalars(stmt).all()
+    stmt = (
+        stmt.options(selectinload(Item.concept_links).selectinload(ItemConcept.concept))
+        .order_by(Item.created_at.desc(), Item.id)
+        .limit(limit)
+        .offset(offset)
+    )
+    return [ItemSummary.from_item(item) for item in db.scalars(stmt).all()]
 
 
 @router.get("/{item_id}", response_model=ItemDetail)
