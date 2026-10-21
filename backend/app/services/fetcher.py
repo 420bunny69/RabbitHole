@@ -42,8 +42,8 @@ def fetch_page(url: str, *, transport: httpx.BaseTransport | None = None) -> Fet
     current = validate_public_url(url)
     try:
         with httpx.Client(
-            transport=transport, timeout=TIMEOUT,transport=transport, timeout=TIMEOUT, headers=build_headers(), follow_redirects=False, follow_redirects=False
-        ) as client:
+            transport=transport, timeout=TIMEOUT, headers=build_headers(), follow_redirects=False
+        ) as client:as client:
             for _ in range(MAX_REDIRECTS + 1):
                 with client.stream("GET", current) as response:
                     if response.is_redirect:
@@ -61,7 +61,7 @@ def fetch_page(url: str, *, transport: httpx.BaseTransport | None = None) -> Fet
 
 
 def _read_body(response: httpx.Response) -> bytes:
-        if response.status_code in (401, 403, 429):
+    if response.status_code in (401, 403, 429):
         raise FetchError(
             f"The website blocked automated access ({response.status_code}). Try pasting the text instead"
         )

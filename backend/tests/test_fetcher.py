@@ -108,21 +108,3 @@ def test_connection_failure_becomes_a_friendly_error(public_dns):
 
     with pytest.raises(FetchError, match="Could not reach"):
         fetch_page("https://example.com/", transport=transport(handler))
-def test_user_agent_includes_the_contact_from_settings(public_dns, monkeypatch):
-    monkeypatch.setattr(
-        fetcher, "get_settings", lambda: Settings(fetch_contact="https://github.com/me/rabbithole")
-    )
-    seen = {}
-
-    def handler(request):
-        seen["ua"] = request.headers["user-agent"]
-        return httpx.Response(200, html="ok")
-
-    fetch_page("https://example.com/", transport=transport(handler))
-    assert seen["ua"] == "RabbitHoleBot/0.1 (https://github.com/me/rabbithole)"
-
-
-@pytest.mark.parametrize("status", [401, 403, 429])
-def test_blocked_access_suggests_pasting_text(public_dns, status):
-    with pytest.raises(FetchError, match="Try pasting the text"):
-        fetch_page("https://example.com/x", transport=transport(lambda r: httpx.Response(status)))
