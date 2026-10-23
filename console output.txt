@@ -1,0 +1,124 @@
+PS D:\RabbitHole>  $h = @{ "X-Owner-Id" = "46049394-cbe3-45b9-8745-fa24c5d196a2"}
+>> Invoke-RestMethod http://127.0.0.1:8000/api/graph -Headers $h | ConvertTo-Json -Depth 5
+{
+    "nodes":  [
+                  {
+                      "id":  "item:2527cdc0-b4ba-49f2-b98e-ce19f93e30b1",
+                      "type":  "item",
+                      "label":  "Earth - Wikipedia",
+                      "item_id":  "2527cdc0-b4ba-49f2-b98e-ce19f93e30b1",
+                      "source_type":  "article",
+                      "url":  "https://en.wikipedia.org/wiki/Earth",
+                      "count":  null
+                  },
+                  {
+                      "id":  "concept:4",
+                      "type":  "concept",
+                      "label":  "greenhouse gases",
+                      "item_id":  null,
+                      "source_type":  null,
+                      "url":  null,
+                      "count":  1
+                  },
+                  {
+                      "id":  "concept:7",
+                      "type":  "concept",
+                      "label":  "human impact",
+                      "item_id":  null,
+                      "source_type":  null,
+                      "url":  null,
+                      "count":  1
+                  },
+                  {
+                      "id":  "concept:3",
+                      "type":  "concept",
+                      "label":  "magnetosphere",
+                      "item_id":  null,
+                      "source_type":  null,
+                      "url":  null,
+                      "count":  1
+                  },
+                  {
+                      "id":  "concept:1",
+                      "type":  "concept",
+                      "label":  "ocean world",
+                      "item_id":  null,
+                      "source_type":  null,
+                      "url":  null,
+                      "count":  1
+                  },
+                  {
+                      "id":  "concept:6",
+                      "type":  "concept",
+                      "label":  "origin of life",
+                      "item_id":  null,
+                      "source_type":  null,
+                      "url":  null,
+                      "count":  1
+                  },
+                  {
+                      "id":  "concept:5",
+                      "type":  "concept",
+                      "label":  "plate tectonics",
+                      "item_id":  null,
+                      "source_type":  null,
+                      "url":  null,
+                      "count":  1
+                  },
+                  {
+                      "id":  "concept:2",
+                      "type":  "concept",
+                      "label":  "tectonic plates",
+                      "item_id":  null,
+                      "source_type":  null,
+                      "url":  null,
+                      "count":  1
+                  }
+              ],
+    "edges":  [
+                  {
+                      "id":  "item:2527cdc0-b4ba-49f2-b98e-ce19f93e30b1-\u003econcept:1",
+                      "source":  "item:2527cdc0-b4ba-49f2-b98e-ce19f93e30b1",
+                      "target":  "concept:1",
+                      "weight":  0.9
+                  },
+                  {
+                      "id":  "item:2527cdc0-b4ba-49f2-b98e-ce19f93e30b1-\u003econcept:2",
+                      "source":  "item:2527cdc0-b4ba-49f2-b98e-ce19f93e30b1",
+                      "target":  "concept:2",
+                      "weight":  0.85
+                  },
+                  {
+                      "id":  "item:2527cdc0-b4ba-49f2-b98e-ce19f93e30b1-\u003econcept:3",
+                      "source":  "item:2527cdc0-b4ba-49f2-b98e-ce19f93e30b1",
+                      "target":  "concept:3",
+                      "weight":  0.8
+                  },
+                  {
+                      "id":  "item:2527cdc0-b4ba-49f2-b98e-ce19f93e30b1-\u003econcept:4",
+                      "source":  "item:2527cdc0-b4ba-49f2-b98e-ce19f93e30b1",
+                      "target":  "concept:4",
+                      "weight":  0.8
+                  },
+                  {
+                      "id":  "item:2527cdc0-b4ba-49f2-b98e-ce19f93e30b1-\u003econcept:5",
+                      "source":  "item:2527cdc0-b4ba-49f2-b98e-ce19f93e30b1",
+                      "target":  "concept:5",
+                      "weight":  0.75
+                  },
+                  {
+                      "id":  "item:2527cdc0-b4ba-49f2-b98e-ce19f93e30b1-\u003econcept:6",
+                      "source":  "item:2527cdc0-b4ba-49f2-b98e-ce19f93e30b1",
+                      "target":  "concept:6",
+                      "weight":  0.7
+                  },
+                  {
+                      "id":  "item:2527cdc0-b4ba-49f2-b98e-ce19f93e30b1-\u003econcept:7",
+                      "source":  "item:2527cdc0-b4ba-49f2-b98e-ce19f93e30b1",
+                      "target":  "concept:7",
+                      "weight":  0.6
+                  }
+              ],
+    "truncated":  false
+}
+PS D:\RabbitHole>

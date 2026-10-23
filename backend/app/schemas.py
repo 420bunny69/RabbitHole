@@ -86,3 +86,28 @@ class ItemDetail(ItemOut):
             raw_text=item.raw_text,
             concepts=[ConceptRef(name=link.concept.name, relevance=link.relevance) for link in links],
         )
+
+
+class GraphNode(BaseModel):
+    """A dot in the knowledge graph: either a saved item or a concept that items share."""
+
+    id: str  # "item:<uuid>" or "concept:<number>", unique across both kinds
+    type: str  # "item" or "concept"
+    label: str
+    item_id: uuid.UUID | None = None  # items only: open it at /items/{item_id}
+    source_type: str | None = None  # items only
+    url: str | None = None  # items only
+    count: int | None = None  # concepts only: how many items use it
+
+
+class GraphEdge(BaseModel):
+    id: str
+    source: str  # an item node id
+    target: str  # a concept node id
+    weight: float  # how relevant the concept is to the item, 0 to 1
+
+
+class Graph(BaseModel):
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
+    truncated: bool  # true when older items were left out because of the limit

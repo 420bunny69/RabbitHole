@@ -1,37 +1,22 @@
 @import 'tailwindcss';
 
 /*
-  Colour tokens. The page is a cool sage "paper" with deep spruce ink and one violet accent.
-  The dark theme follows the visitor's system setting, so only the variable values change.
+  Colour tokens. RabbitHole is a dark workspace: near-black charcoal, one violet accent,
+  a muted blue for hints and a restrained green for the logo and success.
 */
 :root {
-  --paper: #e7ede4;
-  --panel: #f4f7f1;
-  --ink: #15231f;
-  --ink-soft: #52635c;
-  --rule: #b7c4bb;
-  --burrow: #1d3b34;
-  --accent: #5a3fd6;
-  --accent-soft: #e2dcf8;
-  --on-accent: #ffffff;
-  --danger: #b0372d;
-  --danger-soft: #f6dcd8;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #0e1916;
-    --panel: #15241f;
-    --ink: #e3ece6;
-    --ink-soft: #94a89f;
-    --rule: #2c4139;
-    --burrow: #6fb3a0;
-    --accent: #a898ff;
-    --accent-soft: #2a2450;
-    --on-accent: #140f2e;
-    --danger: #ff8e82;
-    --danger-soft: #3c1f1c;
-  }
+  --paper: #0e0f13;
+  --panel: #16171d;
+  --ink: #e9eaf0;
+  --ink-soft: #9ea1b0;
+  --rule: #2b2d38;
+  --burrow: #6bc9a0;
+  --accent: #a596ff;
+  --accent-soft: #272248;
+  --on-accent: #120f26;
+  --info: #7fa6ee;
+  --danger: #ff8f84;
+  --danger-soft: #3a1f23;
 }
 
 @theme inline {
@@ -44,6 +29,7 @@
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-on-accent: var(--on-accent);
+  --color-info: var(--info);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
 }
@@ -77,7 +63,7 @@
 }
 
 html {
-  color-scheme: light dark;
+  color-scheme: dark;
   background-color: var(--paper);
 }
 
@@ -97,4 +83,19 @@ body {
 ::selection {
   background-color: var(--accent-soft);
   color: var(--ink);
+}
+
+/* React Flow: use our colours instead of its own dark theme. */
+.react-flow {
+  --xy-background-color: transparent;
+  --xy-controls-button-background-color: var(--panel);
+  --xy-controls-button-background-color-hover: var(--accent-soft);
+  --xy-controls-button-color: var(--ink);
+  --xy-controls-button-color-hover: var(--ink);
+  --xy-controls-button-border-color: var(--rule);
+  --xy-attribution-background-color: color-mix(in srgb, var(--panel) 85%, transparent);
+}
+
+.react-flow__attribution a {
+  color: var(--ink-soft);
 }

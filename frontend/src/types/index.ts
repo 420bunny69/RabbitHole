@@ -31,3 +31,26 @@ export interface NewItem {
   text?: string
   title?: string
 }
+export interface GraphNode {
+  id: string // "item:<uuid>" or "concept:<number>"
+  type: 'item' | 'concept'
+  label: string
+  item_id: string | null // items only
+  source_type: SourceType | null // items only
+  url: string | null // items only
+  count: number | null // concepts only: how many resources use it
+}
+
+export interface GraphEdge {
+  id: string
+  source: string // an item node id
+  target: string // a concept node id
+  weight: number // 0 to 1
+}
+
+export interface GraphData {
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+  /** True when older resources were left out to keep the graph readable. */
+  truncated: boolean
+}

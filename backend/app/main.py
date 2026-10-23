@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import health, items
+from app.routers import graph, health, items
 
 
 def create_app() -> FastAPI:
@@ -16,9 +16,10 @@ def create_app() -> FastAPI:
         allow_headers=["*"],  # includes our custom X-Owner-Id header
     )
 
-    # Every route lives under /api. New routers (graph, ...) get added here.
+    # Every route lives under /api. New routers get added here.
     app.include_router(health.router, prefix="/api")
     app.include_router(items.router, prefix="/api")
+    app.include_router(graph.router, prefix="/api")
 
     return app
 
