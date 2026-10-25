@@ -47,7 +47,25 @@ class AnalyzedConcept(BaseModel):
 
 class Analysis(BaseModel):
     summary: str
+    takeaways: list[str] = Field(default_factory=list)
     concepts: list[AnalyzedConcept] = Field(min_length=1)
+
+    @field_validator("takeaways", mode="before")
+    @classmethod
+    def _clean_takeaways(cls, raw: object) -> list[str]:
+        if not raw:
+            return []
+        if isinstance(raw, str):
+            return [line.strip("-* ").strip() for line in raw.splitlines() if line.strip()][:5]
+        if isinstance(raw, list):
+            results = []
+            for item in raw:
+                if isinstance(item, str) and item.strip():
+                    results.append(item.strip("-* ").strip())
+                elif isinstance(item, dict) and "text" in item:
+                    results.append(str(item["text"]).strip())
+            return results[:5]
+        return []
 
     @field_validator("summary")
     @classmethod

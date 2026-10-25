@@ -23,7 +23,76 @@ export interface Concept {
 
 export interface ItemDetail extends Omit<Item, 'concepts'> {
   raw_text: string | null
+  notes?: string | null
+  takeaways?: string[]
   concepts: Concept[]
+}
+
+export interface RelatedItem {
+  id: string
+  title: string | null
+  url: string | null
+  source_type: SourceType
+  summary: string | null
+  relationship_reason: string
+  shared_concepts: string[]
+}
+
+export interface TopicItem {
+  id: string
+  title: string | null
+  url: string | null
+  source_type: SourceType
+  summary: string | null
+  status: ItemStatus
+  created_at: string
+}
+
+export interface TopicDetail {
+  id: number
+  name: string
+  count: number
+  items: TopicItem[]
+}
+
+export interface Citation {
+  citation_number: number
+  item_id: string
+  title: string | null
+  url: string | null
+  source_type: SourceType
+  excerpt: string
+}
+
+export interface AskResponse {
+  answer: string
+  citations: Citation[]
+}
+
+export interface TrailStep {
+  id: string
+  step_type: string // "item", "concept", "external", "guidance"
+  title: string
+  item_id?: string | null
+  url?: string | null
+  source_type?: SourceType | null
+  connection_reason: string
+  is_external?: boolean
+}
+
+export interface Trail {
+  id: string
+  title: string
+  steps: TrailStep[]
+}
+
+export interface RecentlyViewedItem {
+  id: string
+  title: string | null
+  url: string | null
+  source_type: SourceType
+  summary: string | null
+  visited_at: string
 }
 
 export interface NewItem {
@@ -31,6 +100,7 @@ export interface NewItem {
   text?: string
   title?: string
 }
+
 export interface GraphNode {
   id: string // "item:<uuid>" or "concept:<number>"
   type: 'item' | 'concept'

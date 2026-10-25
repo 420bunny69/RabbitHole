@@ -94,7 +94,7 @@ export function AddItemForm({ onCreated }: Props) {
             spellCheck={false}
             value={url}
             onChange={(event) => setUrl(event.target.value)}
-            placeholder="Paste an article link"
+            placeholder="Paste an article, YouTube, or GitHub link"
             aria-describedby="add-hint"
             className={`${inputClass} sm:flex-1`}
           />
@@ -135,7 +135,7 @@ export function AddItemForm({ onCreated }: Props) {
 
       <p id="add-hint" className="mt-3 text-sm text-ink-soft">
         {mode === 'link'
-          ? 'Articles and blog posts work now. YouTube and GitHub links are coming soon.'
+          ? 'Supports articles, blog posts, YouTube videos (with transcripts), and public GitHub repositories.'
           : text.trim().length > 0 && textTooShort
             ? `Add at least ${MIN_TEXT_CHARS} characters.`
             : 'Press Ctrl+Enter or Cmd+Enter to save.'}

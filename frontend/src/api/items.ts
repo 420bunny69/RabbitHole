@@ -1,4 +1,4 @@
-import type { Item, ItemDetail, NewItem } from '../types'
+import type { Item, ItemDetail, NewItem, RelatedItem } from '../types'
 import { request } from './client'
 
 export async function listItems(
@@ -29,4 +29,12 @@ export async function retryItem(id: string): Promise<Item> {
 
 export async function deleteItem(id: string): Promise<void> {
   await request<void>(`/api/items/${id}`, { method: 'DELETE' })
+}
+
+export async function getRelatedItems(id: string, signal?: AbortSignal): Promise<RelatedItem[]> {
+  return (await request<RelatedItem[]>(`/api/items/${id}/related`, { signal })).data
+}
+
+export async function updateNotes(id: string, notes: string | null): Promise<ItemDetail> {
+  return (await request<ItemDetail>(`/api/items/${id}/notes`, { method: 'PATCH', body: { notes } })).data
 }

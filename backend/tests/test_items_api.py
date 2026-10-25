@@ -88,14 +88,14 @@ def test_unexpected_errors_do_not_leak_details(client, owner, public_dns, monkey
     assert "secret" not in item["error_message"]
 
 
-def test_youtube_links_are_recognized_but_not_supported_yet(client, owner, public_dns):
+def test_youtube_links_are_recognized_and_handle_unavailable_captions(client, owner, public_dns):
     created = client.post(
         "/api/items", json={"url": "https://www.youtube.com/watch?v=abc"}, headers=owner
     )
     item = client.get(f"/api/items/{created.json()['id']}", headers=owner).json()
     assert item["source_type"] == "youtube"
     assert item["status"] == "failed"
-    assert "not supported yet" in item["error_message"]
+    assert "YouTube" in item["error_message"]
 
 
 # ---- validation -------------------------------------------------------------------------------

@@ -8,9 +8,10 @@ from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
 from app.deps import OwnerId
 from app.models import Item, ItemConcept, ItemStatus, SourceType
-from app.schemas import ItemCreate, ItemDetail, ItemOut, ItemSummary
+from app.schemas import ItemCreate, ItemDetail, ItemNotesUpdate, ItemOut, ItemSummary, RelatedItem
 from app.services.extractors.text import derive_title
 from app.services.pipeline import process_item
+from app.services.related_finder import find_related_items
 from app.services.sources import detect_source_type
 from app.utils.url_safety import UnsafeURLError, validate_public_url
 
@@ -117,3 +118,30 @@ def retry_item(
     db.commit()
     background_tasks.add_task(process_item, item.id)
     return item
+
+
+@router.get("/{item_id}/related", response_model=list[RelatedItem])
+def get_related(
+    item_id: uuid.UUID,
+    owner_id: OwnerId,
+    db: DB,
+    limit: Annotated[int, Query(ge=1, le=20)] = 5,
+):
+    """Find other saved resources from this owner related to item_id."""
+    get_owned_item(db, owner_id, item_id)
+    return find_related_items(db, owner_id, item_id, limit=limit)
+
+
+@router.patch("/{item_id}/notes", response_model=ItemDetail)
+def update_item_notes(
+    item_id: uuid.UUID,
+    payload: ItemNotesUpdate,
+    owner_id: OwnerId,
+    db: DB,
+):
+    """Save personal notes on a resource."""
+    item = get_owned_item(db, owner_id, item_id)
+    item.notes = payload.notes.strip() if payload.notes else None
+    db.commit()
+    return ItemDetail.from_item(item)
+

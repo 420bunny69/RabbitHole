@@ -11,6 +11,8 @@ vi.mock('../api/items', () => ({
   getItem: vi.fn(),
   retryItem: vi.fn(),
   deleteItem: vi.fn(),
+  getRelatedItems: vi.fn().mockResolvedValue([]),
+  updateNotes: vi.fn().mockResolvedValue({}),
 }))
 
 const getMock = vi.mocked(getItem)

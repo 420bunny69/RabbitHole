@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import datetime, timezone
 
@@ -75,17 +76,103 @@ class ConceptRef(BaseModel):
 
 class ItemDetail(ItemOut):
     raw_text: str | None
+    notes: str | None = None
+    takeaways: list[str] = []
     concepts: list[ConceptRef] = []
 
     @classmethod
     def from_item(cls, item: Item) -> "ItemDetail":
         """Build the detail view, listing concepts from most to least relevant."""
         links = sorted(item.concept_links, key=lambda link: -link.relevance)
+        takeaways_list: list[str] = []
+        if item.takeaways:
+            try:
+                parsed = json.loads(item.takeaways)
+                if isinstance(parsed, list):
+                    takeaways_list = [str(t) for t in parsed if t]
+                elif isinstance(parsed, str):
+                    takeaways_list = [parsed]
+            except Exception:
+                takeaways_list = [t.strip("-* ").strip() for t in item.takeaways.splitlines() if t.strip()]
+
         return cls(
             **ItemOut.model_validate(item).model_dump(),
             raw_text=item.raw_text,
+            notes=item.notes,
+            takeaways=takeaways_list,
             concepts=[ConceptRef(name=link.concept.name, relevance=link.relevance) for link in links],
         )
+
+
+class ItemNotesUpdate(BaseModel):
+    notes: str | None = Field(default=None, max_length=50_000)
+
+
+class RelatedItem(BaseModel):
+    id: uuid.UUID
+    title: str | None
+    url: str | None
+    source_type: str
+    summary: str | None
+    relationship_reason: str
+    shared_concepts: list[str] = []
+
+
+class TopicItem(BaseModel):
+    id: uuid.UUID
+    title: str | None
+    url: str | None
+    source_type: str
+    summary: str | None
+    status: str
+    created_at: datetime
+
+    @field_validator("created_at")
+    @classmethod
+    def assume_utc(cls, value: datetime) -> datetime:
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+class TopicDetail(BaseModel):
+    id: int
+    name: str
+    count: int
+    items: list[TopicItem] = []
+
+
+class Citation(BaseModel):
+    citation_number: int
+    item_id: uuid.UUID
+    title: str | None
+    url: str | None
+    source_type: str
+    excerpt: str
+
+
+class AskRequest(BaseModel):
+    question: str = Field(min_length=2, max_length=1000)
+
+
+class AskResponse(BaseModel):
+    answer: str
+    citations: list[Citation] = []
+
+
+class TrailStep(BaseModel):
+    id: str
+    step_type: str  # "item", "concept", "external"
+    title: str
+    item_id: uuid.UUID | None = None
+    url: str | None = None
+    source_type: str | None = None
+    connection_reason: str
+    is_external: bool = False
+
+
+class Trail(BaseModel):
+    id: str
+    title: str
+    steps: list[TrailStep] = []
 
 
 class GraphNode(BaseModel):

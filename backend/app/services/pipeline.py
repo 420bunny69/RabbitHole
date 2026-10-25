@@ -1,5 +1,6 @@
 """Background processing of a saved item: extract the text, then summarize it with the AI."""
 
+import json
 import logging
 import uuid
 
@@ -28,6 +29,8 @@ def save_analysis(db: Session, item: Item, analysis: Analysis) -> None:
     for attempt in range(2):
         try:
             item.summary = analysis.summary
+            if analysis.takeaways:
+                item.takeaways = json.dumps(analysis.takeaways)
             link_concepts(db, item, analysis.concepts)
             item.status = ItemStatus.READY.value
             db.commit()
