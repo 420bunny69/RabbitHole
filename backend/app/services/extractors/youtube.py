@@ -1,4 +1,5 @@
-"""Extracts transcripts and metadata from YouTube videos."""
+
+"""Extract transcripts and metadata from YouTube videos."""
 
 import html
 import json
@@ -9,113 +10,206 @@ import xml.etree.ElementTree as ET
 
 import httpx
 
-from app.services.extractors.base import MAX_TEXT_CHARS, ExtractedContent, ExtractionError
+from app.services.extractors.base import (
+    MAX_TEXT_CHARS,
+    ExtractedContent,
+    ExtractionError,
+)
 from app.services.fetcher import FetchError, fetch_page
 from app.utils.url_safety import UnsafeURLError, validate_public_url
 
 logger = logging.getLogger(__name__)
 
-YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"}
+YOUTUBE_HOSTS = {
+    "youtube.com",
+    "www.youtube.com",
+    "m.youtube.com",
+    "youtu.be",
+}
 
 
 def extract_video_id(url: str) -> str | None:
-    """Extract 11-character video ID from various YouTube URL formats."""
+    """Extract the 11-character video ID from a YouTube URL."""
     parsed = urlsplit(url)
     host = (parsed.hostname or "").lower()
-    if host not in YOUTUBE_HOSTS and not any(host.endswith("." + h) for h in ("youtube.com", "youtu.be")):
+
+    if host not in YOUTUBE_HOSTS and not any(
+        host.endswith("." + h) for h in ("youtube.com", "youtu.be")
+    ):
         return None
 
     if host == "youtu.be":
         path = parsed.path.strip("/")
         return path[:11] if len(path) >= 11 else None
 
-    # youtube.com/watch?v=...
     if parsed.path == "/watch":
-        qs = parse_qs(parsed.query)
-        v = qs.get("v")
-        if v and len(v[0]) == 11:
-            return v[0]
+        video_id = parse_qs(parsed.query).get("v")
+        if video_id and re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id[0]):
+            return video_id[0]
 
-    # youtube.com/shorts/... or youtube.com/embed/...
-    match = re.search(r"/(?:shorts|embed)/([a-zA-Z0-9_-]{11})", parsed.path)
-    if match:
-        return match.group(1)
-
-    return None
+    match = re.search(
+        r"/(?:shorts|embed)/([A-Za-z0-9_-]{11})",
+        parsed.path,
+    )
+    return match.group(1) if match else None
 
 
 def _extract_title(html_content: str) -> str | None:
-    # Try og:title
-    og_match = re.search(r'<meta\s+property=["\']og:title["\']\s+content=["\'](.*?)["\']', html_content, re.IGNORECASE)
-    if og_match:
-        return html.unescape(og_match.group(1)).replace(" - YouTube", "").strip()
+    """Extract the video title from YouTube page HTML."""
+    patterns = (
+        r'<meta\s+property=["\']og:title["\']\s+content=["\'](.*?)["\']',
+        r'<title>(.*?)</title>',
+    )
 
-    title_match = re.search(r"<title>(.*?)</title>", html_content, re.IGNORECASE)
-    if title_match:
-        return html.unescape(title_match.group(1)).replace(" - YouTube", "").strip()
+    for pattern in patterns:
+        match = re.search(pattern, html_content, re.IGNORECASE)
+        if match:
+            return html.unescape(match.group(1)).replace(
+                " - YouTube", ""
+            ).strip()
 
     return None
 
 
 def _extract_captions_url(html_content: str) -> str | None:
-    """Find the timedtext captions URL from ytInitialPlayerResponse in the page HTML."""
-    match = re.search(r"ytInitialPlayerResponse\s*=\s*({.+?});(?:var|<\/script>)", html_content)
-    if not match:
-        # Fallback to json search inside the page
-        match = re.search(r'"captionTracks":\s*(\[\{.+?\}\])', html_content)
-        if match:
-            try:
-                tracks = json.loads(match.group(1))
-                if tracks and isinstance(tracks, list) and "baseUrl" in tracks[0]:
-                    return tracks[0]["baseUrl"]
-            except Exception:
-                pass
-        return None
+    """Extract a caption-track URL from YouTube player response JSON."""
+    markers = (
+        "ytInitialPlayerResponse",
+        "playerResponse",
+    )
 
-    try:
-        data = json.loads(match.group(1))
-        captions = data.get("captions", {})
-        tracklist = captions.get("playerCaptionsTracklistRenderer", {})
-        tracks = tracklist.get("captionTracks", [])
-        if not tracks:
-            return None
+    for marker in markers:
+        position = html_content.find(marker)
+        if position == -1:
+            continue
 
-        # Prefer English if available
-        for track in tracks:
-            lang = track.get("languageCode", "").lower()
-            if lang.startswith("en"):
-                return track.get("baseUrl")
-        return tracks[0].get("baseUrl")
-    except Exception:
-        logger.debug("Failed to parse ytInitialPlayerResponse JSON")
-        return None
+        start = html_content.find("{", position + len(marker))
+        if start == -1:
+            continue
+
+        # Find the end of the JSON object while respecting strings.
+        depth = 0
+        in_string = False
+        escaped = False
+        end = None
+
+        for index in range(start, len(html_content)):
+            char = html_content[index]
+
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+                continue
+
+            if char == '"':
+                in_string = True
+            elif char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    end = index + 1
+                    break
+
+        if end is None:
+            continue
+
+        try:
+            data = json.loads(html_content[start:end])
+        except (json.JSONDecodeError, ValueError):
+            continue
+
+        captions = data.get("captions") or {}
+        tracklist = captions.get("playerCaptionsTracklistRenderer") or {}
+        tracks = tracklist.get("captionTracks") or []
+
+        if tracks:
+            for track in tracks:
+                if track.get("languageCode", "").lower().startswith("en"):
+                    if track.get("baseUrl"):
+                        return track["baseUrl"]
+
+            if tracks[0].get("baseUrl"):
+                return tracks[0]["baseUrl"]
+
+    # Fallback: locate captionTracks JSON in the page.
+    match = re.search(r'"captionTracks"\s*:\s*(\[)', html_content)
+    if match:
+        start = match.start(1)
+        depth = 0
+        in_string = False
+        escaped = False
+
+        for index in range(start, len(html_content)):
+            char = html_content[index]
+
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+                continue
+
+            if char == '"':
+                in_string = True
+            elif char == "[":
+                depth += 1
+            elif char == "]":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        tracks = json.loads(html_content[start:index + 1])
+                        if tracks:
+                            return tracks[0].get("baseUrl")
+                    except (json.JSONDecodeError, ValueError):
+                        pass
+                    break
+
+    return None
 
 
 def parse_timedtext_xml(xml_content: str) -> str:
-    """Parse YouTube timedtext XML and extract spoken text."""
+    """Parse YouTube timed-text XML into plain text."""
     try:
         root = ET.fromstring(xml_content)
         lines = []
-        for elem in root.findall(".//text"):
-            text = elem.text or ""
-            text = html.unescape(text).strip()
-            if text:
-                lines.append(text)
-        return " ".join(lines)
-    except Exception:
-        # Fallback to regex text extraction if XML parse fails
-        raw_texts = re.findall(r'<text[^>]*>(.*?)</text>', xml_content, re.DOTALL)
-        lines = [html.unescape(t).strip() for t in raw_texts if t.strip()]
+
+        for element in root.iter():
+            if element.tag.split("}")[-1] == "text":
+                text = html.unescape("".join(element.itertext())).strip()
+                if text:
+                    lines.append(text)
+
         return " ".join(lines)
 
+    except ET.ParseError:
+        raw_texts = re.findall(
+            r"<text[^>]*>(.*?)</text>",
+            xml_content,
+            re.DOTALL,
+        )
+        return " ".join(html.unescape(text).strip() for text in raw_texts)
 
-def extract_youtube(url: str, *, transport: httpx.BaseTransport | None = None) -> ExtractedContent:
-    """Extract transcript and title from a YouTube video URL."""
+
+def extract_youtube(
+    url: str,
+    *,
+    transport: httpx.BaseTransport | None = None,
+) -> ExtractedContent:
+    """Extract the title and accessible transcript from a YouTube video."""
     video_id = extract_video_id(url)
-    if not video_id:
-        raise ExtractionError("That does not look like a valid YouTube video URL")
 
-    # Normalize url to standard watch URL
+    if not video_id:
+        raise ExtractionError(
+            "That does not look like a valid YouTube video URL"
+        )
+
     watch_url = f"https://www.youtube.com/watch?v={video_id}"
 
     try:
@@ -127,27 +221,54 @@ def extract_youtube(url: str, *, transport: httpx.BaseTransport | None = None) -
     title = _extract_title(html_text) or f"YouTube Video ({video_id})"
 
     captions_url = _extract_captions_url(html_text)
+
     if not captions_url:
         raise ExtractionError(
             "No captions or transcript could be found for that YouTube video. "
-            "RabbitHole requires accessible captions to analyze videos."
+            "The video may not expose accessible captions."
         )
 
-    # Fetch captions XML
     try:
         safe_captions_url = validate_public_url(captions_url)
-        with httpx.Client(transport=transport, timeout=httpx.Timeout(10.0, connect=5.0)) as client:
-            resp = client.get(safe_captions_url)
-            if resp.status_code != 200 or not resp.content:
-                raise ExtractionError("Could not download the transcript for that video")
-            transcript = parse_timedtext_xml(resp.content.decode("utf-8", errors="replace"))
+
+        with httpx.Client(
+            transport=transport,
+            timeout=httpx.Timeout(10.0, connect=5.0),
+            follow_redirects=True,
+        ) as client:
+            response = client.get(safe_captions_url)
+
+            if response.status_code != 200 or not response.content:
+                logger.warning(
+                    "YouTube transcript download failed: HTTP %s, "
+                    "content_length=%s",
+                    response.status_code,
+                    len(response.content),
+                )
+                raise ExtractionError(
+                    "Could not download the transcript "
+                    f"(HTTP {response.status_code})"
+                )
+
+            transcript = parse_timedtext_xml(
+                response.content.decode("utf-8", errors="replace")
+            )
+
     except (httpx.HTTPError, UnsafeURLError):
-        raise ExtractionError("Could not retrieve captions from YouTube") from None
+        logger.exception("YouTube caption request failed")
+        raise ExtractionError(
+            "Could not retrieve captions from YouTube"
+        ) from None
 
     cleaned_text = re.sub(r"\s+", " ", transcript).strip()
-    if not cleaned_text or len(cleaned_text) < 50:
+
+    if len(cleaned_text) < 50:
         raise ExtractionError(
-            "The transcript for that YouTube video was too short or empty."
+            "The transcript was empty or too short to analyze."
         )
 
-    return ExtractedContent(title=title, text=cleaned_text[:MAX_TEXT_CHARS])
+    return ExtractedContent(
+        title=title,
+        text=cleaned_text[:MAX_TEXT_CHARS],
+    )
+
