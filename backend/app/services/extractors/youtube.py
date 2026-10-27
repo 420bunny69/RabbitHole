@@ -240,14 +240,16 @@ def extract_youtube(
 
             if response.status_code != 200 or not response.content:
                 logger.warning(
-                    "YouTube transcript download failed: HTTP %s, "
-                    "content_length=%s",
+                    "YouTube transcript download failed: status=%s, "
+                    "content_length=%s, content_type=%s, final_url=%s",
                     response.status_code,
                     len(response.content),
+                    response.headers.get("content-type"),
+                    str(response.url).split("?")[0],
                 )
                 raise ExtractionError(
-                    "Could not download the transcript "
-                    f"(HTTP {response.status_code})"
+                    "YouTube returned an empty transcript. "
+                    "The caption track may be unavailable."
                 )
 
             transcript = parse_timedtext_xml(
