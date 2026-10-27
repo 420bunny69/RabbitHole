@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toApiError } from '../api/client'
 import { getRelatedItems, updateNotes } from '../api/items'
@@ -47,13 +47,13 @@ function ItemView({ id }: { id: string }) {
   const [related, setRelated] = useState<RelatedItem[]>([])
   const [loadingRelated, setLoadingRelated] = useState(false)
 
-  const title = item ? (item.title ?? (item.url ? displayLocation(item.url) : 'Pasted text')) : null
-  useEffect(() => {
-    document.title = title ? `${title} - RabbitHole` : 'RabbitHole'
+  const title = item ? (item.title ?? (item.url ? displayLocation(item.url) : 'Pasted text')) : null;
+  useLayoutEffect(() => {
+    document.title = title ? `${title} - RabbitHole` : 'RabbitHole';
     return () => {
-      document.title = 'RabbitHole'
-    }
-  }, [title])
+      document.title = 'RabbitHole';
+    };
+  }, [title]);
 
   // Sync notes when item loads
   useEffect(() => {

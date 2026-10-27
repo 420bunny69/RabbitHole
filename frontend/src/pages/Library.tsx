@@ -49,15 +49,27 @@ export function Library() {
       list = list.filter((item) => item.status === statusFilter)
     }
 
+    // Tag items with their original API index so sort is always stable.
+    const indexed = list.map((item, i) => ({ item, i }))
+
     if (sortBy === 'newest') {
-      list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      indexed.sort((a, b) => {
+        const diff = new Date(b.item.created_at).getTime() - new Date(a.item.created_at).getTime()
+        return diff !== 0 ? diff : a.i - b.i
+      })
     } else if (sortBy === 'oldest') {
-      list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      indexed.sort((a, b) => {
+        const diff = new Date(a.item.created_at).getTime() - new Date(b.item.created_at).getTime()
+        return diff !== 0 ? diff : a.i - b.i
+      })
     } else if (sortBy === 'title') {
-      list.sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''))
+      indexed.sort((a, b) => {
+        const diff = (a.item.title ?? '').localeCompare(b.item.title ?? '')
+        return diff !== 0 ? diff : a.i - b.i
+      })
     }
 
-    return list
+    return indexed.map(({ item }) => item)
   }, [items, sourceFilter, statusFilter, sortBy])
 
   const groups = useMemo(() => groupByDay(filteredItems ?? []), [filteredItems])
