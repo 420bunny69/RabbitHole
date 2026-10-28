@@ -1,85 +1,157 @@
 # RabbitHole
 
-AI-powered personal knowledge discovery. Save articles, YouTube videos, blogs and GitHub repos,
-get summaries and key concepts, and explore connections in an interactive knowledge graph.
+RabbitHole is a personal knowledge workspace that turns saved online content into a searchable collection of notes, summaries, concepts, and connected ideas.
 
-**Status:** Day 2 in progress. Backend: saving items, text extraction, AI summaries and concepts.
-Frontend: library, add form and item pages. Next: YouTube and GitHub extractors, then the knowledge graph.
+Instead of leaving useful information scattered across browser tabs, RabbitHole lets you save resources, revisit them in a library, and explore relationships between the ideas they contain.
 
-## Run the backend (Windows PowerShell)
+## Features
 
-```powershell
-cd rabbithole\backend
-py -3.14 -m venv .venv
-.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-copy .env.example .env
-alembic upgrade head
-uvicorn app.main:app --reload
+- **Save resources** from supported URLs and text content.
+- **YouTube transcript extraction** using Supadata, so supported videos can be processed as source material.
+- **Summaries and concept extraction** to make saved material easier to review.
+- **Connected knowledge graph** to explore relationships between concepts from saved resources.
+- **Library** for browsing saved resources.
+- **Resource detail pages** for revisiting the content and its extracted information.
+- **Search and resource management** for finding, retrying, and deleting saved items.
+- **AI provider flexibility** through the configured LLM provider(s), depending on your local environment.
+
+Supported source types and extraction quality depend on the source URL, its availability, and the provider's access to the content. YouTube transcript extraction requires a valid Supadata API key.
+
+## Tech stack
+
+### Frontend
+- React
+- TypeScript
+- Vite
+
+### Backend
+- Python
+- FastAPI
+- SQLAlchemy
+- SQLite
+
+### AI and content extraction
+- Configured LLM provider(s), such as Groq or Ollama
+- Supadata for YouTube transcript retrieval
+
+## Project structure
+
+```text
+RabbitHole/
+├── backend/       # FastAPI application, database models, routes, and tests
+└── frontend/      # React + TypeScript + Vite application
 ```
 
-Then open http://127.0.0.1:8000/api/health and http://127.0.0.1:8000/docs.
+## Prerequisites
 
-`alembic upgrade head` creates the database tables (a file called `rabbithole.db` in `backend/`).
-Run it again whenever a new migration is added.
+Install the following before running the project:
 
-## Run the frontend (Windows PowerShell)
+- Python
+- Node.js and npm
+- Git
 
-Needs Node.js 20.19 or newer, or 22.12 or newer (check with `node -v`; install the LTS version from
-https://nodejs.org if yours is older). Keep the backend running in its own terminal, then:
+You will also need the API keys required by the providers you have enabled. Keep secrets in local environment files and never commit them to Git.
+
+## Configuration
+
+1. Open the `backend` directory.
+2. Create or update the environment file expected by the backend.
+3. Add the API keys and provider settings required by your current configuration, including the Supadata key for YouTube transcripts.
+4. Confirm that the backend loads the environment variables before making provider requests.
+
+**Important:** Use the variable names already expected by the codebase. Do not rename environment variables just to match this README. Never commit real API keys or `.env` files.
+
+## Run locally on Windows
+
+Open two separate PowerShell terminals from the project directory.
+
+### 1. Start the backend
 
 ```powershell
-cd rabbithole\frontend
+cd D:\RabbitHole\backend
+..\.venv\Scripts\Activate.ps1
+python -m uvicorn app.main:app --reload
+```
+
+The API should be available at:
+
+- API: http://127.0.0.1:8000
+- Interactive API docs: http://127.0.0.1:8000/docs
+
+If your virtual environment is located inside `backend` instead of the project root, activate it with:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Use the activation path that matches your actual environment.
+
+### 2. Start the frontend
+
+In a second terminal:
+
+```powershell
+cd D:\RabbitHole\frontend
 npm install
 npm run dev
 ```
 
-Open http://localhost:5173. While developing, Vite forwards `/api` requests to the backend on port 8000,
-so there is no CORS setup. Other commands: `npm test` (tests), `npm run build` (type-check and production build).
+Vite prints the local frontend URL in the terminal, usually http://localhost:5173.
 
-## Set up the AI
+## Testing
 
-Summaries and concepts come from an AI model. Edit `backend\.env` (copied from `.env.example`):
+### Backend
 
-- **Groq (hosted, free tier):** create a key at https://console.groq.com, then set `GROQ_API_KEY=...`
-- **Ollama (local):** install Ollama, run `ollama pull llama3.1`, then set `LLM_PROVIDER=ollama`
-
-Restart `uvicorn` after editing `.env`. Never commit `.env` (it is in `.gitignore`).
-The tests never call the AI, so they pass without a key.
-
-## Try the API
-
-Every request needs an `X-Owner-Id` header (any UUID; the frontend will generate one per browser).
-In PowerShell:
+From the `backend` directory, with the project's virtual environment activated:
 
 ```powershell
-$h = @{ "X-Owner-Id" = "11111111-1111-4111-8111-111111111111" }
-$body = '{"url": "https://en.wikipedia.org/wiki/Gradient_descent"}'
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/items -Headers $h -ContentType "application/json" -Body $body
-Invoke-RestMethod http://127.0.0.1:8000/api/items -Headers $h
+python -m pytest
 ```
 
-The first call returns `status: pending`; a few seconds later the list shows `ready` (or `failed` with
-an `error_message`). You can also use the interactive page at http://127.0.0.1:8000/docs.
+### Frontend
 
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/api/items` | Save a `url` or pasted `text` |
-| GET | `/api/items` | List your items (`?q=`, `?limit=`, `?offset=`) |
-| GET | `/api/items/{id}` | One item, including its extracted text |
-| DELETE | `/api/items/{id}` | Delete an item |
-| POST | `/api/items/{id}/retry` | Re-run a failed item |
-
-## Run the tests
+From the `frontend` directory:
 
 ```powershell
-cd rabbithole\backend
-.venv\Scripts\Activate.ps1
-pytest
+npm test
 ```
 
-## Changing the database
+To create a production build:
 
-1. Edit `backend/app/models.py`.
-2. Create a migration: `alembic revision --autogenerate -m "describe the change"`
-3. Check the new file in `backend/alembic/versions/`, then run `alembic upgrade head`.
+```powershell
+npm run build
+```
+
+Run the tests and build again after making changes. A passing test suite does not replace a manual end-to-end check of saving a source, opening it, and verifying its extracted content and graph connections.
+
+## Typical workflow
+
+1. Start the backend and frontend.
+2. Add a supported URL or text resource.
+3. Let RabbitHole retrieve the source content and process it.
+4. Open the saved item to review its summary and extracted concepts.
+5. Browse the library and explore the connected knowledge graph.
+
+For YouTube, transcript retrieval must succeed before the video can be processed reliably. If it fails, check that the Supadata key is present in the backend environment, that the key is valid, and that the video has an accessible transcript.
+
+## Current scope
+
+RabbitHole is currently documented as a **single-user workspace**. Account registration, login, and multi-user data isolation are not included in this README's feature set.
+
+## Security notes
+
+- Do not commit API keys, access tokens, or local `.env` files.
+- Keep provider credentials on the backend; do not expose secret keys in frontend code.
+- Treat extracted summaries and concepts as AI-generated interpretations and verify important details against the original source.
+
+## Contributing / development
+
+1. Create a branch for your change.
+2. Make the smallest focused change possible.
+3. Run the relevant backend and frontend tests.
+4. Run the frontend production build.
+5. Manually verify the affected workflow before merging.
+
+---
+
+Built to help turn browsing into connected understanding.
