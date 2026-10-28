@@ -4,7 +4,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.routers import ask, graph, health, items, topics, trails
 
+from dotenv import load_dotenv
 
+load_dotenv()
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title=settings.app_name)

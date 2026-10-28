@@ -1,6 +1,7 @@
 
 """Extract transcripts and metadata from YouTube videos."""
-
+import os
+import time
 import html
 import json
 import logging
@@ -174,27 +175,59 @@ def _extract_captions_url(html_content: str) -> str | None:
     return None
 
 
+
 def parse_timedtext_xml(xml_content: str) -> str:
-    """Parse YouTube timed-text XML into plain text."""
+    """Parse YouTube captions in XML, JSON3, or WebVTT format."""
+    content = xml_content.strip()
+
+    if not content:
+        return ""
+
+    # YouTube JSON3 captions
     try:
-        root = ET.fromstring(xml_content)
+        data = json.loads(content)
+        if isinstance(data, dict) and isinstance(data.get("events"), list):
+            parts = []
+            for event in data["events"]:
+                for segment in event.get("segs") or []:
+                    text = segment.get("utf8", "")
+                    if text.strip():
+                        parts.append(text)
+            return re.sub(r"\s+", " ", "".join(parts)).strip()
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # WebVTT captions
+    if content.startswith("WEBVTT"):
+        lines = []
+        for line in content.splitlines():
+            line = line.strip()
+            if (
+                not line
+                or line == "WEBVTT"
+                or "-->" in line
+                or line.isdigit()
+            ):
+                continue
+            lines.append(line)
+        return re.sub(r"\s+", " ", " ".join(lines)).strip()
+
+    # XML captions
+    try:
+        root = ET.fromstring(content)
         lines = []
 
         for element in root.iter():
             if element.tag.split("}")[-1] == "text":
-                text = html.unescape("".join(element.itertext())).strip()
+                text = "".join(element.itertext()).strip()
                 if text:
-                    lines.append(text)
+                    lines.append(html.unescape(text))
 
-        return " ".join(lines)
+        return re.sub(r"\s+", " ", " ".join(lines)).strip()
 
     except ET.ParseError:
-        raw_texts = re.findall(
-            r"<text[^>]*>(.*?)</text>",
-            xml_content,
-            re.DOTALL,
-        )
-        return " ".join(html.unescape(text).strip() for text in raw_texts)
+        return ""
+
 
 
 def extract_youtube(
@@ -202,7 +235,7 @@ def extract_youtube(
     *,
     transport: httpx.BaseTransport | None = None,
 ) -> ExtractedContent:
-    """Extract the title and accessible transcript from a YouTube video."""
+    """Extract a YouTube transcript using Supadata."""
     video_id = extract_video_id(url)
 
     if not video_id:
@@ -210,56 +243,132 @@ def extract_youtube(
             "That does not look like a valid YouTube video URL"
         )
 
-    watch_url = f"https://www.youtube.com/watch?v={video_id}"
-
-    try:
-        page = fetch_page(watch_url, transport=transport)
-    except (FetchError, UnsafeURLError) as error:
-        raise ExtractionError(str(error)) from None
-
-    html_text = page.content.decode("utf-8", errors="replace")
-    title = _extract_title(html_text) or f"YouTube Video ({video_id})"
-
-    captions_url = _extract_captions_url(html_text)
-
-    if not captions_url:
+    api_key = os.getenv("SUPADATA_API_KEY")
+    if not api_key:
         raise ExtractionError(
-            "No captions or transcript could be found for that YouTube video. "
-            "The video may not expose accessible captions."
+            "YouTube transcript service is not configured. "
+            "Check SUPADATA_API_KEY in the backend environment."
         )
 
+    watch_url = f"https://www.youtube.com/watch?v={video_id}"
+    title = f"YouTube Video ({video_id})"
+    headers = {"x-api-key": api_key}
+    base_url = "https://api.supadata.ai/v1"
+
     try:
-        safe_captions_url = validate_public_url(captions_url)
+        # Title retrieval is best-effort; transcript extraction is
+        # handled separately so a blocked YouTube page won't stop it.
+        try:
+            page = fetch_page(watch_url, transport=transport)
+            html_text = page.content.decode("utf-8", errors="replace")
+            title = _extract_title(html_text) or title
+        except (FetchError, UnsafeURLError, httpx.HTTPError):
+            logger.info("Could not retrieve YouTube page title")
 
         with httpx.Client(
             transport=transport,
-            timeout=httpx.Timeout(10.0, connect=5.0),
+            timeout=httpx.Timeout(20.0, connect=5.0),
             follow_redirects=True,
         ) as client:
-            response = client.get(safe_captions_url)
-
-            if response.status_code != 200 or not response.content:
-                logger.warning(
-                    "YouTube transcript download failed: status=%s, "
-                    "content_length=%s, content_type=%s, final_url=%s",
-                    response.status_code,
-                    len(response.content),
-                    response.headers.get("content-type"),
-                    str(response.url).split("?")[0],
-                )
-                raise ExtractionError(
-                    "YouTube returned an empty transcript. "
-                    "The caption track may be unavailable."
-                )
-
-            transcript = parse_timedtext_xml(
-                response.content.decode("utf-8", errors="replace")
+            response = client.get(
+                f"{base_url}/transcript",
+                params={
+                    "url": watch_url,
+                    "lang": "en",
+                    "text": "true",
+                    "mode": "auto",
+                },
+                headers=headers,
             )
 
-    except (httpx.HTTPError, UnsafeURLError):
-        logger.exception("YouTube caption request failed")
+            if response.status_code == 206:
+                raise ExtractionError(
+                    "No usable transcript is available for this video."
+                )
+
+            if response.status_code not in (200, 202):
+                logger.warning(
+                    "Supadata transcript request failed: status=%s",
+                    response.status_code,
+                )
+
+                messages = {
+                    401: "Supadata rejected the API key. Check "
+                         "SUPADATA_API_KEY in your backend .env file.",
+                    402: "Supadata has insufficient credits. Check "
+                         "your account usage and plan.",
+                    403: "Supadata denied this request. Check your "
+                         "account permissions.",
+                    404: "Supadata could not find this video.",
+                    429: "Supadata rate limit reached. Try again later.",
+                }
+                raise ExtractionError(
+                    messages.get(
+                        response.status_code,
+                        "Supadata could not retrieve this transcript.",
+                    )
+                )
+
+            data = response.json()
+
+            # Large transcripts may be processed asynchronously.
+            if response.status_code == 202 or data.get("jobId"):
+                job_id = data.get("jobId")
+                if not job_id:
+                    raise ExtractionError(
+                        "Supadata returned an invalid transcript job."
+                    )
+
+                for _ in range(60):
+                    time.sleep(1)
+                    result = client.get(
+                        f"{base_url}/transcript/{job_id}",
+                        headers=headers,
+                    )
+
+                    if result.status_code != 200:
+                        raise ExtractionError(
+                            "Could not retrieve the processed transcript."
+                        )
+
+                    data = result.json()
+                    status = data.get("status")
+
+                    if status == "completed":
+                        break
+
+                    if status == "failed":
+                        raise ExtractionError(
+                            "Supadata could not generate this transcript."
+                        )
+                else:
+                    raise ExtractionError(
+                        "Transcript processing timed out. Please retry."
+                    )
+
+            content = data.get("content", "")
+
+            if isinstance(content, list):
+                transcript = " ".join(
+                    str(chunk.get("text", ""))
+                    for chunk in content
+                    if isinstance(chunk, dict)
+                )
+            elif isinstance(content, str):
+                transcript = content
+            else:
+                transcript = ""
+
+    except ExtractionError:
+        raise
+    except (httpx.HTTPError, ValueError) as error:
+        logger.warning(
+            "Supadata transcript request failed: %s",
+            type(error).__name__,
+        )
         raise ExtractionError(
-            "Could not retrieve captions from YouTube"
+            "Could not retrieve the YouTube transcript. "
+            "Check your connection and try again."
         ) from None
 
     cleaned_text = re.sub(r"\s+", " ", transcript).strip()

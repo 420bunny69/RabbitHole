@@ -1,0 +1,7 @@
+cd D:\RabbitHole\backend
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn app.main:app --reload
+
+
+cd D:\RabbitHole\frontend
+npm run dev
