@@ -105,3 +105,38 @@ class Suggestion(Base):
     snippet: Mapped[str | None] = mapped_column(Text)
 
     item: Mapped[Item] = relationship(back_populates="suggestions")
+
+
+class Workspace(Base):
+    """A personal workspace containing resources and concepts."""
+
+    __tablename__ = "workspaces"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(100), default="Personal Workspace")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    claim_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    claim_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    user_link: Mapped["UserWorkspace | None"] = relationship(
+        back_populates="workspace", cascade="all, delete-orphan", uselist=False
+    )
+
+
+class UserWorkspace(Base):
+    """Maps a Supabase authenticated user to their personal workspace.
+
+    Enforces 1:1 mapping between a Supabase user and a personal workspace.
+    """
+
+    __tablename__ = "user_workspaces"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    role: Mapped[str] = mapped_column(String(20), default="owner")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    workspace: Mapped[Workspace] = relationship(back_populates="user_link")
+
