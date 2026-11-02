@@ -2,18 +2,25 @@
 
 import uuid
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, selectinload, with_loader_criteria
 
-from app.models import Item, ItemConcept, ItemStatus
+from app.models import Concept, Item, ItemConcept, ItemStatus
 from app.schemas import Trail, TrailStep
 
 
-def build_curiosity_trail(db: Session, owner_id: uuid.UUID) -> Trail:
+def build_curiosity_trail(db: Session, workspace_id: uuid.UUID) -> Trail:
     """Build an exploratory trail through saved resources and connected concepts."""
     stmt = (
         select(Item)
-        .where(Item.owner_id == owner_id, Item.status == ItemStatus.READY.value)
-        .options(selectinload(Item.concept_links).selectinload(ItemConcept.concept))
+        .where(Item.owner_id == workspace_id, Item.status == ItemStatus.READY.value)
+        .options(
+            selectinload(Item.concept_links).selectinload(ItemConcept.concept),
+            with_loader_criteria(
+                ItemConcept,
+                ItemConcept.concept.has(Concept.owner_id == workspace_id),
+                include_aliases=True,
+            ),
+        )
         .order_by(Item.created_at.desc())
     )
     items = list(db.scalars(stmt))

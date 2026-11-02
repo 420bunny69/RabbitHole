@@ -2,6 +2,9 @@ from uuid import uuid4
 
 import pytest
 
+from app import deps
+from app.main import app
+from app.models import Concept, Item, ItemConcept
 from app.services import pipeline
 from app.services.llm import LLMError
 
@@ -11,8 +14,13 @@ GRADIENT = "Gradient descent finds minima of a function by following the slope."
 
 
 @pytest.fixture()
+def client(authenticated_client):
+    return authenticated_client["client"]
+
+
+@pytest.fixture()
 def owner():
-    return {"X-Owner-Id": str(uuid4())}
+    return {}
 
 
 def save(client, owner, text) -> str:
@@ -96,10 +104,12 @@ def test_deleting_an_item_removes_it_and_its_private_concepts(client, owner):
     assert {n["label"] for n in of_type(data, "concept")} == {"gradient descent", "shared idea"}
 
 
-def test_other_visitors_see_only_their_own_graph(client, owner):
+def test_other_users_see_only_their_workspace_graph(client, owner, authenticated_client):
+    original_user_id = authenticated_client["user_id"]
     save(client, owner, ENTROPY)
-    stranger = {"X-Owner-Id": str(uuid4())}
-    assert graph(client, stranger) == {"nodes": [], "edges": [], "truncated": False}
+    authenticated_client["create_user_mapping"]()
+    assert graph(client, owner) == {"nodes": [], "edges": [], "truncated": False}
+    authenticated_client["identity"]["user_id"] = original_user_id
     assert len(of_type(graph(client, owner), "item")) == 1
 
 
@@ -114,9 +124,44 @@ def test_limit_keeps_the_newest_items_and_says_so(client, owner):
 
 
 def test_invalid_requests_are_rejected(client, owner):
-    assert client.get("/api/graph").status_code == 400  # no X-Owner-Id header
     assert client.get("/api/graph", params={"limit": 0}, headers=owner).status_code == 422
     assert client.get("/api/graph", params={"limit": 201}, headers=owner).status_code == 422
     assert client.get("/api/graph", params={"min_items": 0}, headers=owner).status_code == 422
+
+
+def test_anonymous_and_unmapped_users_are_rejected(client, authenticated_client):
+    user_dependency = app.dependency_overrides.pop(deps.get_supabase_user_id)
+    try:
+        anonymous = client.get("/api/graph", headers={"X-Owner-Id": str(authenticated_client["workspace_id"])})
+    finally:
+        app.dependency_overrides[deps.get_supabase_user_id] = user_dependency
+    assert anonymous.status_code == 401
+
+    authenticated_client["identity"]["user_id"] = uuid4()
+    assert client.get("/api/graph").status_code == 403
+
+
+def test_graph_excludes_cross_workspace_concept_links(client, authenticated_client, owner):
+    owner_user = authenticated_client["user_id"]
+    owner_workspace = authenticated_client["workspace_id"]
+    _, foreign_workspace = authenticated_client["create_user_mapping"]()
+    with authenticated_client["session_factory"]() as db:
+        item = Item(
+            owner_id=owner_workspace,
+            source_type="text",
+            title="Owned item",
+            raw_text="Owned content",
+            status="ready",
+        )
+        concept = Concept(owner_id=foreign_workspace, name="foreign private concept")
+        db.add_all([item, concept])
+        db.flush()
+        db.add(ItemConcept(item_id=item.id, concept_id=concept.id, relevance=1.0))
+        db.commit()
+
+    authenticated_client["identity"]["user_id"] = owner_user
+    data = graph(client, owner)
+    assert "foreign private concept" not in {node["label"] for node in of_type(data, "concept")}
+    assert data["edges"] == []
 
     

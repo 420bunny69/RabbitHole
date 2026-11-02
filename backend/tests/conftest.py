@@ -1,4 +1,5 @@
 import socket
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -7,8 +8,10 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app import models  # noqa: F401  (registers the tables on Base.metadata)
+from app import deps
 from app.database import Base, enable_sqlite_foreign_keys, get_db
 from app.main import app
+from app.models import UserWorkspace, Workspace
 from app.services import pipeline
 from app.services.analyzer import Analysis
 from app.utils import url_safety
@@ -40,6 +43,55 @@ def client(monkeypatch):
         yield c
     app.dependency_overrides.clear()
     engine.dispose()
+
+
+@pytest.fixture()
+def authenticated_client(monkeypatch):
+    """An item-test client with a mapped Supabase user and an isolated SQLite database."""
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    enable_sqlite_foreign_keys(engine)
+    Base.metadata.create_all(engine)
+    TestingSession = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    identity = {"user_id": None}
+
+    def override_get_db():
+        db = TestingSession()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    def create_user_mapping():
+        user_id = uuid4()
+        workspace = Workspace()
+        with TestingSession() as db:
+            db.add(workspace)
+            db.flush()
+            db.add(UserWorkspace(user_id=user_id, workspace_id=workspace.id))
+            db.commit()
+        identity["user_id"] = user_id
+        return user_id, workspace.id
+
+    user_id, workspace_id = create_user_mapping()
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[deps.get_supabase_user_id] = lambda: identity["user_id"]
+    monkeypatch.setattr(pipeline, "SessionLocal", TestingSession)
+
+    try:
+        with TestClient(app) as test_client:
+            yield {
+                "client": test_client,
+                "session_factory": TestingSession,
+                "identity": identity,
+                "user_id": user_id,
+                "workspace_id": workspace_id,
+                "create_user_mapping": create_user_mapping,
+            }
+    finally:
+        app.dependency_overrides.clear()
+        engine.dispose()
 
 
 @pytest.fixture()

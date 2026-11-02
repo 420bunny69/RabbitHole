@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import ask, graph, health, items, topics, trails
+from app.routers import ask, graph, health, items, topics, trails, workspaces
 
 from dotenv import load_dotenv
 
@@ -25,6 +25,7 @@ def create_app() -> FastAPI:
     app.include_router(topics.router, prefix="/api")
     app.include_router(ask.router, prefix="/api")
     app.include_router(trails.router, prefix="/api")
+    app.include_router(workspaces.router, prefix="/api")
 
     return app
 

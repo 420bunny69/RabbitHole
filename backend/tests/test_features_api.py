@@ -1,7 +1,9 @@
 from uuid import uuid4
 import pytest
 
-from app.models import Item, ItemConcept, ItemStatus
+from app import deps
+from app.main import app
+from app.models import Concept, Item, ItemConcept, ItemStatus
 from app.services.extractors.github import parse_github_repo
 from app.services.extractors.youtube import extract_video_id
 
@@ -11,11 +13,17 @@ PASTED_3 = "Quantum computing leverages superposition and entanglement for compu
 
 
 @pytest.fixture()
+def client(authenticated_client):
+    return authenticated_client["client"]
+
+
+@pytest.fixture()
 def owner():
-    return {"X-Owner-Id": str(uuid4())}
+    return {}
 
 
-def test_notes_can_be_saved_and_retrieved(client, owner):
+def test_notes_can_be_saved_and_retrieved(client, owner, authenticated_client):
+    original_user_id = authenticated_client["user_id"]
     created = client.post("/api/items", json={"text": PASTED_1}, headers=owner).json()
     item_id = created["id"]
 
@@ -37,15 +45,17 @@ def test_notes_can_be_saved_and_retrieved(client, owner):
     assert detail["notes"] == "Need to review step size hyperparameter."
 
     # Other owner cannot access or update notes
-    other_owner = {"X-Owner-Id": str(uuid4())}
+    authenticated_client["create_user_mapping"]()
     assert client.patch(
         f"/api/items/{item_id}/notes",
         json={"notes": "Hacked"},
-        headers=other_owner,
+        headers=owner,
     ).status_code == 404
+    authenticated_client["identity"]["user_id"] = original_user_id
 
 
-def test_related_items_endpoint(client, owner):
+def test_related_items_endpoint(client, owner, authenticated_client):
+    original_user_id = authenticated_client["user_id"]
     id1 = client.post("/api/items", json={"text": PASTED_1}, headers=owner).json()["id"]
     id2 = client.post("/api/items", json={"text": PASTED_2}, headers=owner).json()["id"]
     id3 = client.post("/api/items", json={"text": PASTED_3}, headers=owner).json()["id"]
@@ -61,11 +71,13 @@ def test_related_items_endpoint(client, owner):
     assert "concept" in match["relationship_reason"].lower() or "discuss" in match["relationship_reason"].lower()
 
     # Isolation check
-    other_owner = {"X-Owner-Id": str(uuid4())}
-    assert client.get(f"/api/items/{id1}/related", headers=other_owner).status_code == 404
+    authenticated_client["create_user_mapping"]()
+    assert client.get(f"/api/items/{id1}/related", headers=owner).status_code == 404
+    authenticated_client["identity"]["user_id"] = original_user_id
 
 
-def test_topics_endpoint(client, owner):
+def test_topics_endpoint(client, owner, authenticated_client):
+    original_user_id = authenticated_client["user_id"]
     client.post("/api/items", json={"text": PASTED_1}, headers=owner)
     client.post("/api/items", json={"text": PASTED_2}, headers=owner)
 
@@ -81,12 +93,14 @@ def test_topics_endpoint(client, owner):
         assert t["count"] >= 1
 
     # Isolation check
-    other_owner = {"X-Owner-Id": str(uuid4())}
-    empty_topics = client.get("/api/topics", headers=other_owner).json()
+    authenticated_client["create_user_mapping"]()
+    empty_topics = client.get("/api/topics", headers=owner).json()
     assert empty_topics == []
+    authenticated_client["identity"]["user_id"] = original_user_id
 
 
-def test_ask_rabbithole_endpoint(client, owner):
+def test_ask_rabbithole_endpoint(client, owner, authenticated_client):
+    original_user_id = authenticated_client["user_id"]
     client.post("/api/items", json={"text": PASTED_1}, headers=owner)
 
     # Ask a relevant question
@@ -112,17 +126,19 @@ def test_ask_rabbithole_endpoint(client, owner):
     assert len(res_unrelated.json()["citations"]) == 0
 
     # Other owner gets no results from our library
-    other_owner = {"X-Owner-Id": str(uuid4())}
+    authenticated_client["create_user_mapping"]()
     res_other = client.post(
         "/api/ask",
         json={"question": "What is gradient descent?"},
-        headers=other_owner,
+        headers=owner,
     )
     assert res_other.status_code == 200
     assert len(res_other.json()["citations"]) == 0
+    authenticated_client["identity"]["user_id"] = original_user_id
 
 
-def test_trails_endpoint(client, owner):
+def test_trails_endpoint(client, owner, authenticated_client):
+    original_user_id = authenticated_client["user_id"]
     client.post("/api/items", json={"text": PASTED_1}, headers=owner)
     client.post("/api/items", json={"text": PASTED_2}, headers=owner)
 
@@ -134,6 +150,80 @@ def test_trails_endpoint(client, owner):
     assert len(trail["steps"]) >= 2
     # Verify steps have connections and reasons
     assert all("connection_reason" in step for step in trail["steps"])
+
+    authenticated_client["create_user_mapping"]()
+    other_trail = client.get("/api/trails", headers=owner).json()
+    assert not any(step.get("item_id") for step in other_trail["steps"])
+    authenticated_client["identity"]["user_id"] = original_user_id
+
+
+def test_anonymous_and_unmapped_users_are_rejected_for_all_four_apis(client, authenticated_client):
+    requests = [
+        lambda: client.get("/api/graph"),
+        lambda: client.get("/api/topics"),
+        lambda: client.post("/api/ask", json={"question": "test question"}),
+        lambda: client.get("/api/trails"),
+    ]
+    user_dependency = app.dependency_overrides.pop(deps.get_supabase_user_id)
+    try:
+        anonymous_responses = [request() for request in requests]
+    finally:
+        app.dependency_overrides[deps.get_supabase_user_id] = user_dependency
+    assert [response.status_code for response in anonymous_responses] == [401] * 4
+
+    authenticated_client["identity"]["user_id"] = uuid4()
+    unmapped_responses = [request() for request in requests]
+    assert [response.status_code for response in unmapped_responses] == [403] * 4
+
+
+def test_topic_relationship_does_not_expose_foreign_workspace_item(client, authenticated_client):
+    owner_user = authenticated_client["user_id"]
+    owner_workspace = authenticated_client["workspace_id"]
+    _, foreign_workspace = authenticated_client["create_user_mapping"]()
+    with authenticated_client["session_factory"]() as db:
+        item = Item(
+            owner_id=foreign_workspace,
+            source_type="text",
+            title="Foreign item",
+            raw_text="Foreign content",
+            summary="Foreign summary",
+            status=ItemStatus.READY.value,
+        )
+        concept = Concept(owner_id=owner_workspace, name="owned concept")
+        db.add_all([item, concept])
+        db.flush()
+        db.add(ItemConcept(item_id=item.id, concept_id=concept.id, relevance=1.0))
+        db.commit()
+
+    authenticated_client["identity"]["user_id"] = owner_user
+    topics = client.get("/api/topics").json()
+    assert all(item["title"] != "Foreign item" for topic in topics for item in topic["items"])
+
+
+def test_ask_and_trail_exclude_foreign_workspace_concepts(client, authenticated_client, owner):
+    owner_user = authenticated_client["user_id"]
+    owner_workspace = authenticated_client["workspace_id"]
+    _, foreign_workspace = authenticated_client["create_user_mapping"]()
+    with authenticated_client["session_factory"]() as db:
+        item = Item(
+            owner_id=owner_workspace,
+            source_type="text",
+            title="Neutral owned item",
+            raw_text="Neutral content",
+            summary="Neutral summary",
+            status=ItemStatus.READY.value,
+        )
+        concept = Concept(owner_id=foreign_workspace, name="foreignonlyterm")
+        db.add_all([item, concept])
+        db.flush()
+        db.add(ItemConcept(item_id=item.id, concept_id=concept.id, relevance=1.0))
+        db.commit()
+
+    authenticated_client["identity"]["user_id"] = owner_user
+    answer = client.post("/api/ask", json={"question": "foreignonlyterm"}, headers=owner).json()
+    assert answer["citations"] == []
+    trail = client.get("/api/trails", headers=owner).json()
+    assert "foreignonlyterm" not in {step["title"] for step in trail["steps"]}
 
 
 def test_youtube_video_id_parser():

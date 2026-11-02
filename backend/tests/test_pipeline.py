@@ -18,8 +18,13 @@ BUSY = "The AI service is busy right now (rate limit). Please retry in a minute"
 
 
 @pytest.fixture()
+def client(authenticated_client):
+    return authenticated_client["client"]
+
+
+@pytest.fixture()
 def owner():
-    return {"X-Owner-Id": str(uuid4())}
+    return {}
 
 
 @pytest.fixture()
@@ -81,9 +86,10 @@ def test_items_of_the_same_visitor_share_concept_rows(client, owner):
         assert len(shared.item_links) == 2  # one concept, linked from both items
 
 
-def test_different_visitors_do_not_share_concepts(client):
-    for _ in range(2):
-        client.post("/api/items", json={"text": PASTED}, headers={"X-Owner-Id": str(uuid4())})
+def test_different_workspaces_do_not_share_concepts(client, authenticated_client, owner):
+    client.post("/api/items", json={"text": PASTED}, headers=owner)
+    authenticated_client["create_user_mapping"]()
+    client.post("/api/items", json={"text": PASTED}, headers=owner)
     with pipeline.SessionLocal() as db:
         assert count(db, Concept) == 4  # "entropy" and "shared idea", once per visitor
 

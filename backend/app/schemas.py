@@ -1,6 +1,7 @@
 import json
 import uuid
 from datetime import datetime, timezone
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -173,6 +174,17 @@ class Trail(BaseModel):
     id: str
     title: str
     steps: list[TrailStep] = []
+
+
+class WorkspaceClaimRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    claim_token: str = Field(min_length=1, max_length=256)
+
+
+class WorkspaceClaimResponse(BaseModel):
+    status: Literal["claimed"]
+    workspace_id: uuid.UUID
 
 
 class GraphNode(BaseModel):

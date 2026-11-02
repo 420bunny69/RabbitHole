@@ -2,11 +2,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, selectinload, with_loader_criteria
 
 from app.database import get_db
-from app.deps import OwnerId
-from app.models import Item, ItemConcept, ItemStatus
+from app.deps import CurrentWorkspaceId
+from app.models import Concept, Item, ItemConcept, ItemStatus
 from app.schemas import Graph, GraphEdge, GraphNode
 
 router = APIRouter(prefix="/graph", tags=["graph"])
@@ -16,7 +16,7 @@ DB = Annotated[Session, Depends(get_db)]
 
 @router.get("", response_model=Graph)
 def get_graph(
-    owner_id: OwnerId,
+    workspace_id: CurrentWorkspaceId,
     db: DB,
     limit: Annotated[int, Query(ge=1, le=200, description="How many of the newest items to include")] = 100,
     min_items: Annotated[int, Query(ge=1, le=50, description="Hide concepts used by fewer items")] = 1,
@@ -28,8 +28,15 @@ def get_graph(
     """
     stmt = (
         select(Item)
-        .where(Item.owner_id == owner_id, Item.status == ItemStatus.READY.value)
-        .options(selectinload(Item.concept_links).selectinload(ItemConcept.concept))
+        .where(Item.owner_id == workspace_id, Item.status == ItemStatus.READY.value)
+        .options(
+            selectinload(Item.concept_links).selectinload(ItemConcept.concept),
+            with_loader_criteria(
+                ItemConcept,
+                ItemConcept.concept.has(Concept.owner_id == workspace_id),
+                include_aliases=True,
+            ),
+        )
         .order_by(Item.created_at.desc(), Item.id)
         .limit(limit + 1)  # one extra row tells us whether older items were cut off
     )

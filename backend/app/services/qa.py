@@ -6,10 +6,10 @@ import uuid
 
 import httpx
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, selectinload, with_loader_criteria
 
 from app.config import get_settings
-from app.models import Item, ItemConcept, ItemStatus
+from app.models import Concept, Item, ItemConcept, ItemStatus
 from app.schemas import AskResponse, Citation
 from app.services.llm import LLMError
 from app.services.llm.groq import GroqProvider
@@ -79,12 +79,12 @@ def _find_best_excerpt(text: str, terms: list[str], max_len: int = 280) -> str:
 
 def answer_question(
     db: Session,
-    owner_id: uuid.UUID,
+    workspace_id: uuid.UUID,
     question: str,
     *,
     transport: httpx.BaseTransport | None = None,
 ) -> AskResponse:
-    """Retrieve relevant resources for owner_id and generate a grounded answer."""
+    """Retrieve relevant resources for a workspace and generate a grounded answer."""
     terms = _extract_query_terms(question)
     if not terms:
         return AskResponse(
@@ -92,11 +92,18 @@ def answer_question(
             citations=[],
         )
 
-    # Fetch all ready items for this owner
+    # Fetch ready items and concept links for this workspace only.
     stmt = (
         select(Item)
-        .where(Item.owner_id == owner_id, Item.status == ItemStatus.READY.value)
-        .options(selectinload(Item.concept_links).selectinload(ItemConcept.concept))
+        .where(Item.owner_id == workspace_id, Item.status == ItemStatus.READY.value)
+        .options(
+            selectinload(Item.concept_links).selectinload(ItemConcept.concept),
+            with_loader_criteria(
+                ItemConcept,
+                ItemConcept.concept.has(Concept.owner_id == workspace_id),
+                include_aliases=True,
+            ),
+        )
     )
     items = list(db.scalars(stmt))
     if not items:

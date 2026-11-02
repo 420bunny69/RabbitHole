@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import OwnerId
+from app.deps import CurrentWorkspaceId
 from app.schemas import AskRequest, AskResponse
 from app.services.qa import answer_question
 
@@ -16,6 +16,6 @@ DB = Annotated[Session, Depends(get_db)]
 
 
 @router.post("", response_model=AskResponse)
-def ask_rabbithole(payload: AskRequest, owner_id: OwnerId, db: DB) -> AskResponse:
+def ask_rabbithole(payload: AskRequest, workspace_id: CurrentWorkspaceId, db: DB) -> AskResponse:
     """Answer a question grounded in the visitor's saved resources with citations."""
-    return answer_question(db, owner_id, payload.question)
+    return answer_question(db, workspace_id, payload.question)

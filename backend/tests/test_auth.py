@@ -16,6 +16,8 @@ from jwt import PyJWKClient
 from jwt.exceptions import PyJWKClientConnectionError
 
 from app import deps
+from app.database import get_db
+from app.models import UserWorkspace, Workspace
 
 ISSUER = "https://rabbithole-test.supabase.co/auth/v1"
 JWKS_URL = f"{ISSUER}/.well-known/jwks.json"
@@ -108,6 +110,18 @@ def auth_context(monkeypatch):
         "jwks_client": jwks_client,
         "settings": settings,
     }
+
+
+def make_workspace_dependency_client(db_session, user_id):
+    app = FastAPI()
+    app.dependency_overrides[deps.get_supabase_user_id] = lambda: user_id
+    app.dependency_overrides[get_db] = lambda: db_session
+
+    @app.get("/workspace")
+    def get_workspace(workspace_id: deps.CurrentWorkspaceId) -> dict[str, str]:
+        return {"workspace_id": str(workspace_id)}
+
+    return TestClient(app)
 
 
 def test_missing_bearer_token_returns_401(auth_context):
@@ -210,6 +224,50 @@ def test_valid_token_returns_verified_subject_uuid(auth_context):
     assert response.status_code == 200
     assert UUID(response.json()["user_id"]) == SUBJECT
     assert auth_context["fetches"] == [JWKS_URL]
+
+
+def test_current_workspace_id_returns_authenticated_users_mapping(db_session):
+    user_id = UUID("49fb63a8-6ab7-473c-812b-76fa9c6264bb")
+    workspace = Workspace()
+    db_session.add(workspace)
+    db_session.flush()
+    db_session.add(UserWorkspace(user_id=user_id, workspace_id=workspace.id))
+    db_session.commit()
+
+    with make_workspace_dependency_client(db_session, user_id) as client:
+        response = client.get("/workspace")
+
+    assert response.status_code == 200
+    assert UUID(response.json()["workspace_id"]) == workspace.id
+
+
+def test_current_workspace_id_rejects_authenticated_user_without_mapping(db_session):
+    user_id = UUID("fe7227cd-165f-4192-ae55-555cdaff0344")
+
+    with make_workspace_dependency_client(db_session, user_id) as client:
+        response = client.get("/workspace")
+
+    assert response.status_code == 403
+
+
+def test_current_workspace_id_ignores_client_workspace_values(db_session):
+    user_id = UUID("2d5a5bb8-82dd-44b2-80f0-04e72c49a0c4")
+    workspace = Workspace()
+    other_workspace = Workspace()
+    db_session.add_all([workspace, other_workspace])
+    db_session.flush()
+    db_session.add(UserWorkspace(user_id=user_id, workspace_id=workspace.id))
+    db_session.commit()
+
+    with make_workspace_dependency_client(db_session, user_id) as client:
+        response = client.get(
+            "/workspace",
+            params={"workspace_id": str(other_workspace.id)},
+            headers={"X-Owner-Id": str(other_workspace.id)},
+        )
+
+    assert response.status_code == 200
+    assert UUID(response.json()["workspace_id"]) == workspace.id
 
 
 def test_future_not_before_claim_returns_401(auth_context):

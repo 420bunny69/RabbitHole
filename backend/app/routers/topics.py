@@ -4,10 +4,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, selectinload, with_loader_criteria
 
 from app.database import get_db
-from app.deps import OwnerId
+from app.deps import CurrentWorkspaceId
 from app.models import Concept, Item, ItemConcept, ItemStatus
 from app.schemas import TopicDetail, TopicItem
 
@@ -17,14 +17,19 @@ DB = Annotated[Session, Depends(get_db)]
 
 
 @router.get("", response_model=list[TopicDetail])
-def list_topics(owner_id: OwnerId, db: DB) -> list[TopicDetail]:
+def list_topics(workspace_id: CurrentWorkspaceId, db: DB) -> list[TopicDetail]:
     """Return all extracted concepts and their associated items for this owner."""
     stmt = (
         select(Concept)
-        .where(Concept.owner_id == owner_id)
+        .where(Concept.owner_id == workspace_id)
         .options(
             selectinload(Concept.item_links)
-            .selectinload(ItemConcept.item)
+            .selectinload(ItemConcept.item),
+            with_loader_criteria(
+                ItemConcept,
+                ItemConcept.item.has(Item.owner_id == workspace_id),
+                include_aliases=True,
+            ),
         )
     )
     concepts = list(db.scalars(stmt))

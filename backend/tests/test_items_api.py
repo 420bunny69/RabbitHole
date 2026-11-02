@@ -1,7 +1,10 @@
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
+from app import deps
+from app.main import app
+from app.models import Item
 from app.services.extractors import web
 from app.services.fetcher import FetchedPage, FetchError
 from tests.samples import ARTICLE_HTML
@@ -10,8 +13,13 @@ PASTED = "Entropy measures disorder in a system.\nIt never decreases in an isola
 
 
 @pytest.fixture()
+def client(authenticated_client):
+    return authenticated_client["client"]
+
+
+@pytest.fixture()
 def owner():
-    return {"X-Owner-Id": str(uuid4())}
+    return {}
 
 
 @pytest.fixture()
@@ -122,21 +130,65 @@ def test_invalid_requests_are_rejected(client, owner, public_dns, body):
     assert client.post("/api/items", json=body, headers=owner).status_code == 422
 
 
-def test_owner_header_is_required(client):
-    assert client.post("/api/items", json={"text": PASTED}).status_code == 400
-    assert client.get("/api/items").status_code == 400
+def test_anonymous_item_requests_are_rejected(client, authenticated_client):
+    auth_override = app.dependency_overrides.pop(deps.get_supabase_user_id)
+    headers = {"X-Owner-Id": str(authenticated_client["workspace_id"])}
+    try:
+        create_response = client.post("/api/items", json={"text": PASTED}, headers=headers)
+        list_response = client.get("/api/items", headers=headers)
+    finally:
+        app.dependency_overrides[deps.get_supabase_user_id] = auth_override
+
+    assert create_response.status_code == 401
+    assert list_response.status_code == 401
+
+
+def test_authenticated_user_without_mapping_is_forbidden(client, authenticated_client):
+    authenticated_client["identity"]["user_id"] = uuid4()
+
+    response = client.get("/api/items", headers={"X-Owner-Id": str(authenticated_client["workspace_id"])})
+
+    assert response.status_code == 403
 
 
 # ---- listing, owner isolation, delete, retry --------------------------------------------------
-def test_other_visitors_cannot_see_or_change_my_items(client, owner):
-    other = {"X-Owner-Id": str(uuid4())}
+def test_other_workspaces_cannot_see_or_change_my_items(client, owner, authenticated_client):
+    original_user_id = authenticated_client["user_id"]
     item_id = client.post("/api/items", json={"text": PASTED}, headers=owner).json()["id"]
+    other_user_id, _ = authenticated_client["create_user_mapping"]()
 
-    assert client.get("/api/items", headers=other).json() == []
-    assert client.get(f"/api/items/{item_id}", headers=other).status_code == 404
-    assert client.delete(f"/api/items/{item_id}", headers=other).status_code == 404
-    assert client.post(f"/api/items/{item_id}/retry", headers=other).status_code == 404
+    assert other_user_id != original_user_id
+    assert client.get("/api/items", headers=owner).json() == []
+    assert client.get(f"/api/items/{item_id}", headers=owner).status_code == 404
+    assert client.delete(f"/api/items/{item_id}", headers=owner).status_code == 404
+    assert client.post(f"/api/items/{item_id}/retry", headers=owner).status_code == 404
+    assert client.get(f"/api/items/{item_id}/related", headers=owner).status_code == 404
+    assert client.patch(
+        f"/api/items/{item_id}/notes", json={"notes": "unauthorized"}, headers=owner
+    ).status_code == 404
+    authenticated_client["identity"]["user_id"] = original_user_id
     assert client.get(f"/api/items/{item_id}", headers=owner).status_code == 200
+
+
+def test_x_owner_id_cannot_override_mapped_workspace(client, authenticated_client):
+    original_user_id = authenticated_client["user_id"]
+    original_workspace_id = authenticated_client["workspace_id"]
+    _, other_workspace_id = authenticated_client["create_user_mapping"]()
+    authenticated_client["identity"]["user_id"] = original_user_id
+
+    response = client.post(
+        "/api/items",
+        json={"text": PASTED},
+        headers={"X-Owner-Id": str(other_workspace_id)},
+    )
+    item_id = UUID(response.json()["id"])
+
+    assert response.status_code == 201
+    with authenticated_client["session_factory"]() as db:
+        assert db.get(Item, item_id).owner_id == original_workspace_id
+
+    authenticated_client["identity"]["user_id"] = uuid4()
+    assert client.get("/api/items", headers={"X-Owner-Id": str(original_workspace_id)}).status_code == 403
 
 
 def test_list_is_newest_first_and_searchable(client, owner):

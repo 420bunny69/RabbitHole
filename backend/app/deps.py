@@ -7,8 +7,11 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
 from jwt import PyJWKClient
 from jwt.exceptions import PyJWKClientConnectionError, PyJWKClientError
+from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.database import get_db
+from app.models import UserWorkspace
 
 _bearer_scheme = HTTPBearer(auto_error=False)
 _SUPPORTED_SUPABASE_ALGORITHMS = frozenset({"ES256", "HS256", "RS256"})
@@ -122,3 +125,16 @@ def get_supabase_user_id(
 
 
 SupabaseUserId = Annotated[UUID, Depends(get_supabase_user_id)]
+
+
+def get_current_workspace_id(
+    user_id: SupabaseUserId,
+    db: Annotated[Session, Depends(get_db)],
+) -> UUID:
+    user_workspace = db.get(UserWorkspace, user_id)
+    if user_workspace is None:
+        raise HTTPException(status_code=403, detail="No workspace is linked to this account")
+    return user_workspace.workspace_id
+
+
+CurrentWorkspaceId = Annotated[UUID, Depends(get_current_workspace_id)]
