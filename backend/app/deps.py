@@ -61,8 +61,15 @@ def get_supabase_user_id(
         raise HTTPException(status_code=503, detail="Supabase JWT verification is not configured")
     if algorithm not in _SUPPORTED_SUPABASE_ALGORITHMS:
         raise HTTPException(status_code=503, detail="Configured Supabase JWT algorithm is unsupported")
-    if algorithm == "HS256" and not settings.supabase_jwt_secret:
-        raise HTTPException(status_code=503, detail="Supabase JWT signing secret is not configured")
+    if algorithm == "HS256":
+        secret = settings.supabase_jwt_secret
+        if not secret:
+            raise HTTPException(status_code=503, detail="Supabase JWT signing secret is not configured")
+        if len(secret.encode("utf-8")) < 32:
+            raise HTTPException(
+                status_code=503,
+                detail="Supabase JWT signing secret must be at least 32 bytes",
+            )
 
     token = credentials.credentials
     try:
@@ -71,7 +78,7 @@ def get_supabase_user_id(
             raise jwt.InvalidAlgorithmError("Token algorithm does not match trusted configuration")
 
         if algorithm == "HS256":
-            signing_key = settings.supabase_jwt_secret
+            signing_key = secret
         else:
             signing_key = _get_jwks_client(issuer).get_signing_key_from_jwt(token).key
 

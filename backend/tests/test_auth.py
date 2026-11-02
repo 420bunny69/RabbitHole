@@ -1,3 +1,6 @@
+import base64
+import hashlib
+import hmac
 import json
 import time
 from types import SimpleNamespace
@@ -6,9 +9,11 @@ from uuid import UUID
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from jwt import PyJWKClient
+from jwt.exceptions import PyJWKClientConnectionError
 
 from app import deps
 
@@ -46,6 +51,18 @@ def make_rsa_token(private_key, kid="test-key", claims=None, headers=None):
         algorithm="RS256",
         headers=token_headers,
     )
+
+
+def make_hmac_token(claims, key):
+    def encode_part(value):
+        return base64.urlsafe_b64encode(
+            json.dumps(value, separators=(",", ":")).encode("utf-8")
+        ).rstrip(b"=").decode("ascii")
+
+    signing_input = f'{encode_part({"alg": "HS256", "typ": "JWT"})}.{encode_part(claims)}'
+    signature = hmac.new(key, signing_input.encode("ascii"), hashlib.sha256).digest()
+    encoded_signature = base64.urlsafe_b64encode(signature).rstrip(b"=").decode("ascii")
+    return f"{signing_input}.{encoded_signature}"
 
 
 @pytest.fixture
@@ -118,6 +135,37 @@ def test_expired_token_returns_401(auth_context):
     response = auth_context["client"].get("/whoami", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 401
+
+
+@pytest.mark.parametrize("claim", ["exp", "iat", "iss", "aud"])
+def test_missing_required_claim_returns_401(auth_context, claim):
+    claims = make_claims()
+    del claims[claim]
+    token = make_rsa_token(auth_context["private_key"], claims=claims)
+
+    response = auth_context["client"].get("/whoami", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+
+
+def test_malformed_exp_returns_401(auth_context):
+    token = make_rsa_token(auth_context["private_key"], claims=make_claims(exp="not-a-time"))
+
+    response = auth_context["client"].get("/whoami", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+
+
+def test_rsa_public_key_cannot_be_used_as_hmac_secret(auth_context):
+    public_key = auth_context["private_key"].public_key().public_bytes(
+        Encoding.DER, PublicFormat.SubjectPublicKeyInfo
+    )
+    token = make_hmac_token(make_claims(), public_key)
+
+    response = auth_context["client"].get("/whoami", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+    assert auth_context["fetches"] == []
 
 
 def test_wrong_issuer_returns_401(auth_context):
@@ -197,6 +245,31 @@ def test_token_jku_header_does_not_change_trusted_jwks_url(auth_context):
     assert auth_context["fetches"] == [JWKS_URL]
 
 
+def test_token_x5u_header_does_not_cause_external_request(auth_context):
+    token = make_rsa_token(
+        auth_context["private_key"], headers={"x5u": "https://attacker.example/certificate"}
+    )
+
+    response = auth_context["client"].get("/whoami", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    assert auth_context["jwks_client"].uri == JWKS_URL
+    assert auth_context["fetches"] == [JWKS_URL]
+
+
+def test_jwks_connection_failure_returns_503(auth_context, monkeypatch):
+    class UnavailableJwksClient:
+        def get_signing_key_from_jwt(self, token):
+            raise PyJWKClientConnectionError("offline")
+
+    monkeypatch.setattr(deps, "_get_jwks_client", lambda issuer: UnavailableJwksClient())
+    token = make_rsa_token(auth_context["private_key"])
+
+    response = auth_context["client"].get("/whoami", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 503
+
+
 def test_configured_hs256_algorithm_uses_configured_secret(auth_context):
     auth_context["settings"].supabase_jwt_algorithm = "HS256"
     secret = "local-test-signing-secret-with-32-bytes-minimum"
@@ -208,6 +281,23 @@ def test_configured_hs256_algorithm_uses_configured_secret(auth_context):
     assert response.status_code == 200
     assert UUID(response.json()["user_id"]) == SUBJECT
     assert auth_context["fetches"] == []
+
+
+@pytest.mark.parametrize(
+    ("secret", "expected_detail"),
+    [("", "not configured"), ("short-secret", "at least 32 bytes")],
+)
+def test_missing_or_weak_hs256_secret_fails_configuration(auth_context, secret, expected_detail):
+    auth_context["settings"].supabase_jwt_algorithm = "HS256"
+    auth_context["settings"].supabase_jwt_secret = secret
+    token = jwt.encode(make_claims(), "test-hmac-secret-with-at-least-32-bytes", algorithm="HS256")
+
+    response = auth_context["client"].get("/whoami", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 503
+    assert expected_detail in response.json()["detail"].lower()
+    if secret:
+        assert secret not in response.text
 
 
 def test_jwks_refresh_accepts_a_rotated_key(auth_context):
