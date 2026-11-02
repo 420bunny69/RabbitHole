@@ -75,7 +75,7 @@ def test_min_items_hides_concepts_used_by_only_one_item(client, owner):
 def test_items_that_are_not_ready_are_left_out(client, owner, monkeypatch):
     save(client, owner, ENTROPY)
 
-    def busy(title, text):
+    def busy(title, text,known_concepts=None):
         raise LLMError("The AI service is busy right now")
 
     monkeypatch.setattr(pipeline, "analyze_text", busy)

@@ -66,7 +66,7 @@ def fake_analysis(monkeypatch):
     so tests can check that items of the same owner reuse a concept.
     """
 
-    def fake_analyze(title, text):
+    def fake_analyze(title, text,known_concepts=None):
         main = "gradient descent" if "gradient" in text.lower() else "entropy"
         return Analysis(
             summary="A short test summary of the content.",

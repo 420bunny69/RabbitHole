@@ -115,7 +115,7 @@ def parse_analysis(raw: str) -> Analysis:
 
 
 def analyze_text(
-    title: str | None, text: str, provider: LLMProvider | None = None
+    title: str | None, text: str, provider: LLMProvider | None = None,
 ) -> Analysis:
     """Ask the AI for a summary and concepts. Retries once if the answer is unusable.
 

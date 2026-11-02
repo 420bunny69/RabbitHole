@@ -62,7 +62,7 @@ def test_the_list_includes_each_items_concept_names(client, owner):
 
 
 def test_the_list_shows_no_concepts_for_an_item_that_has_none_yet(client, owner, monkeypatch):
-    def busy(title, text):
+    def busy(title, text,known_concepts=None):
         raise LLMError(BUSY)
 
     monkeypatch.setattr(pipeline, "analyze_text", busy)
@@ -93,7 +93,7 @@ def test_ai_failure_keeps_the_text_and_retry_does_not_download_again(
 ):
     working = pipeline.analyze_text
 
-    def busy(title, text):
+    def busy(title, text,known_concepts=None):
         raise LLMError(BUSY)
 
     monkeypatch.setattr(pipeline, "analyze_text", busy)
@@ -115,7 +115,7 @@ def test_ai_failure_keeps_the_text_and_retry_does_not_download_again(
 
 
 def test_unexpected_ai_errors_do_not_leak_details(client, owner, monkeypatch):
-    def broken(title, text):
+    def broken(title, text,known_concepts=None):
         raise RuntimeError("secret internal detail")
 
     monkeypatch.setattr(pipeline, "analyze_text", broken)
