@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     app_name: str = "RabbitHole API"
     database_url: str = "sqlite:///./rabbithole.db"
     cors_origins: str = "http://localhost:5173"
+    supabase_jwt_issuer: str = ""
+    supabase_jwt_audience: str = "authenticated"
+    supabase_jwt_algorithm: str = ""
+    supabase_jwt_secret: str = ""
 
     llm_provider: str = "groq"  # "groq" or "ollama"
     groq_api_key: str = ""
