@@ -22,7 +22,12 @@ RETRY_NOTE = (
 )
 
 
-def build_user_prompt(title: str | None, text: str) -> str:
+def build_user_prompt(
+    title: str | None, text: str, known_concepts: list[str] | None = None
+) -> str:
     # Remove the closing tag so the text cannot "break out" of the <content> block.
     safe_text = text.replace("</content>", "")[:MAX_PROMPT_CHARS]
-    return f"Title: {title or 'Untitled'}\n\n<content>\n{safe_text}\n</content>"
+    prompt = f"Title: {title or 'Untitled'}\n\n<content>\n{safe_text}\n</content>"
+    if known_concepts:
+        prompt += "\n\nExisting concepts:\n" + "\n".join(f"- {name}" for name in known_concepts)
+    return prompt
