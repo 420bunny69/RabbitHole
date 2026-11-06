@@ -1,13 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { getOwnerId } from '../lib/owner'
+import { useAuth } from '../contexts/AuthContext'
 import { AddItemModal } from './AddItemModal'
 import {
-  CheckIcon,
   ClockIcon,
   CloseIcon,
   CompassIcon,
-  CopyIcon,
   DocumentIcon,
   GraphIcon,
   LogoMark,
@@ -38,19 +36,10 @@ const NAV_ITEMS: NavItem[] = [
 export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [logoutError, setLogoutError] = useState('')
   const [globalQuery, setGlobalQuery] = useState('')
   const navigate = useNavigate()
-  const ownerId = getOwnerId()
-  const shortOwnerId = ownerId ? `${ownerId.slice(0, 8)}…${ownerId.slice(-4)}` : 'Anonymous'
-
-  function copyOwnerId() {
-    if (!ownerId) return
-    navigator.clipboard?.writeText(ownerId).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }).catch(() => {})
-  }
+  const { user, signOut } = useAuth()
 
   function handleSearchSubmit(e: FormEvent) {
     e.preventDefault()
@@ -62,6 +51,20 @@ export function Layout() {
 
   function handleItemCreated(item: Item) {
     navigate(`/items/${item.id}`)
+  }
+
+  async function handleSignOut() {
+    setLogoutError('')
+    try {
+      const { error } = await signOut()
+      if (error) {
+        setLogoutError(error.message || 'Unable to sign out. Please try again.')
+        return
+      }
+      navigate('/login', { replace: true })
+    } catch (error) {
+      setLogoutError(error instanceof Error ? error.message : 'Unable to sign out. Please try again.')
+    }
   }
 
   return (
@@ -178,27 +181,21 @@ export function Layout() {
           })}
         </nav>
 
-        {/* Anonymous Workspace Indicator */}
+        {/* Signed-in account */}
         <div className="border-t border-rule/60 p-4">
           <div className="rounded-xl border border-rule/70 bg-paper/60 p-3 text-xs">
-            <div className="flex items-center justify-between text-ink-soft">
-              <span className="font-medium text-ink">Private Workspace</span>
-              <button
-                type="button"
-                onClick={copyOwnerId}
-                title="Copy Workspace ID"
-                aria-label="Copy Workspace ID"
-                className="flex items-center gap-1 rounded p-1 text-ink-soft hover:bg-rule/50 hover:text-ink"
-              >
-                {copied ? <CheckIcon className="size-3.5 text-burrow" /> : <CopyIcon className="size-3.5" />}
-              </button>
-            </div>
-            <div className="mt-1 font-mono text-[11px] text-ink-soft/90 truncate" title={ownerId}>
-              {shortOwnerId}
-            </div>
-            <p className="mt-1.5 text-[10px] leading-tight text-ink-soft/60">
-              Data is tied to this browser.
-            </p>
+            <span className="block font-medium text-ink">Signed in</span>
+            <span className="mt-1 block truncate text-ink-soft" title={user?.email ?? undefined}>
+              {user?.email ?? 'Account'}
+            </span>
+            {logoutError && <p role="alert" className="mt-2 text-danger">{logoutError}</p>}
+            <button
+              type="button"
+              onClick={() => void handleSignOut()}
+              className="mt-3 w-full rounded-md border border-rule px-2.5 py-1.5 text-left font-medium text-ink-soft hover:bg-rule/40 hover:text-ink"
+            >
+              Sign out
+            </button>
           </div>
         </div>
       </aside>

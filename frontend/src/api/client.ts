@@ -1,4 +1,4 @@
-import { getOwnerId } from '../lib/owner'
+import { getCurrentAccessToken, SupabaseConfigurationError } from '../lib/supabase'
 
 // Empty in development (Vite forwards /api to the backend). Set VITE_API_URL for a deployed site.
 const BASE_URL = ((import.meta.env.VITE_API_URL as string | undefined) ?? '').replace(/\/+$/, '')
@@ -30,7 +30,18 @@ export async function request<T>(
   path: string,
   { method = 'GET', body, signal }: RequestOptions = {},
 ): Promise<{ data: T; status: number }> {
-  const headers: Record<string, string> = { 'X-Owner-Id': getOwnerId() }
+  let accessToken: string | null
+  try {
+    accessToken = await getCurrentAccessToken()
+  } catch (error) {
+    if (error instanceof SupabaseConfigurationError) {
+      throw new ApiError(0, error.message)
+    }
+    throw new ApiError(0, 'Unable to verify your sign-in session. Please try again.')
+  }
+
+  const headers: Record<string, string> = {}
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`
   if (body !== undefined) headers['Content-Type'] = 'application/json'
 
   let response: Response

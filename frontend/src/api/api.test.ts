@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getCurrentAccessToken, SupabaseConfigurationError } from '../lib/supabase'
 import { ApiError } from './client'
 import { createItem, deleteItem, getItem, listItems, retryItem } from './items'
+
+vi.mock('../lib/supabase', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/supabase')>()
+  return {
+    ...actual,
+    getCurrentAccessToken: vi.fn().mockResolvedValue(null),
+  }
+})
 
 const fetchMock = vi.fn()
 
@@ -20,6 +29,7 @@ function lastCall() {
 
 beforeEach(() => {
   fetchMock.mockReset()
+  vi.mocked(getCurrentAccessToken).mockReset().mockResolvedValue(null)
   vi.stubGlobal('fetch', fetchMock)
 })
 afterEach(() => {
@@ -28,13 +38,35 @@ afterEach(() => {
 })
 
 describe('requests', () => {
-  it('send the visitor ID, and only send a JSON content type when there is a body', async () => {
+  it('does not authorize requests without a Supabase session', async () => {
+    localStorage.setItem('rabbithole.ownerId', 'existing-owner-id')
     reply([])
     await listItems()
     const get = lastCall()
-    expect(get.init.headers['X-Owner-Id']).toBe(localStorage.getItem('rabbithole.ownerId'))
+    expect(get.init.headers.Authorization).toBeUndefined()
+    expect(get.init.headers['X-Owner-Id']).toBeUndefined()
     expect(get.init.headers['Content-Type']).toBeUndefined()
+    expect(localStorage.getItem('rabbithole.ownerId')).toBe('existing-owner-id')
+  })
 
+  it('includes the current Supabase access token as a Bearer token', async () => {
+    vi.mocked(getCurrentAccessToken).mockResolvedValue('current-access-token')
+    reply([])
+    await listItems()
+    expect(lastCall().init.headers.Authorization).toBe('Bearer current-access-token')
+    expect(lastCall().init.headers['X-Owner-Id']).toBeUndefined()
+  })
+
+  it('does not send requests when Supabase configuration is missing', async () => {
+    vi.mocked(getCurrentAccessToken).mockRejectedValue(new SupabaseConfigurationError())
+    await expect(listItems()).rejects.toMatchObject({
+      status: 0,
+      message: expect.stringContaining('VITE_SUPABASE_URL'),
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('only sends a JSON content type when there is a body', async () => {
     reply({ id: '1' }, 201)
     await createItem({ text: 'some text that is long enough' })
     const post = lastCall()
