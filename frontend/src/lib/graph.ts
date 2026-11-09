@@ -8,7 +8,7 @@ export type ItemNodeData = { label: string; sourceType: SourceType | null; url: 
 export type ConceptNodeData = { label: string; count: number }
 export type FlowNode = Node<ItemNodeData, 'item'> | Node<ConceptNodeData, 'concept'>
 
-const ITEM_SIZE: Size = { width: 232, height: 88 }
+const ITEM_SIZE: Size = { width: 264, height: 120 }
 export const CONCEPT_MAX_WIDTH = 220
 
 /** Roughly how big a node is on screen, so the layout can keep nodes from overlapping. */
@@ -21,8 +21,8 @@ type LayoutNode = { id: string } & Size
 type LayoutLink = { source: string; target: string }
 
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
-const IDEAL_DISTANCE = 280 // how far apart connected nodes like to sit
-const GRAVITY = 0.12 // a gentle pull to the middle so separate clusters stay on screen
+const IDEAL_DISTANCE = 230 // keeps connected groups spacious without shrinking the fitted graph
+const GRAVITY = 0.14 // keeps separate clusters from drifting too far apart
 
 /**
  * Places nodes so that connected ones sit close together and unconnected ones drift apart
@@ -171,14 +171,15 @@ export function buildFlowEdges(data: GraphData, selectedId: string | null): Edge
       id: edge.id,
       source: edge.source,
       target: edge.target,
-      type: 'straight',
+      type: 'default',
       selectable: false,
       focusable: false,
       deletable: false,
       style: {
         stroke: touchesSelection ? 'var(--accent)' : 'var(--ink-soft)',
-        strokeWidth: touchesSelection ? 2 : 1.25,
-        opacity: faded ? 0.07 : touchesSelection ? 0.95 : 0.18 + 0.4 * edge.weight,
+        strokeWidth: touchesSelection ? 2.2 : 1.35,
+        opacity: faded ? 0.06 : touchesSelection ? 0.92 : 0.14 + 0.32 * edge.weight,
+        transition: 'stroke 180ms ease, opacity 180ms ease, stroke-width 180ms ease',
       },
     }
   })

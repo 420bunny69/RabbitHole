@@ -40,7 +40,9 @@ describe('GraphPage', () => {
     renderPage()
     expect(screen.getByText(/loading your graph/i)).toBeInTheDocument()
     expect(await screen.findByTestId('graph')).toHaveTextContent('3 nodes')
-    expect(screen.getByText(/2 resources · 1 concept$/)).toBeInTheDocument()
+    const stats = screen.getByLabelText('Graph statistics')
+    expect(stats).toHaveTextContent(/2\s*Resources/)
+    expect(stats).toHaveTextContent(/1\s*Concepts/)
   })
 
   it('invites the visitor to save things when there is nothing yet', async () => {

@@ -99,3 +99,20 @@ body {
 .react-flow__attribution a {
   color: var(--ink-soft);
 }
+
+.knowledge-graph-canvas {
+  background-image:
+    radial-gradient(ellipse at 18% 8%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 38%),
+    radial-gradient(ellipse at 85% 90%, color-mix(in srgb, var(--burrow) 5%, transparent), transparent 34%);
+}
+
+.knowledge-graph-canvas:fullscreen {
+  width: 100vw;
+  height: 100dvh;
+  border: 0;
+  border-radius: 0;
+}
+
+.knowledge-graph-canvas .react-flow__edge-path {
+  transition: stroke 180ms ease, opacity 180ms ease, stroke-width 180ms ease;
+}

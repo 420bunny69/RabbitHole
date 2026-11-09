@@ -29,13 +29,16 @@ describe('GraphPanel', () => {
   it('explains the graph when nothing is selected', () => {
     renderPanel(null)
     expect(screen.getByText(/explore the connections/i)).toBeInTheDocument()
-    expect(screen.getByText(/1 shared concept links your 2 resources/i)).toBeInTheDocument()
+    expect(screen.getByText(/1 shared concept connect your resources/i)).toBeInTheDocument()
+    expect(screen.getByText('Connections')).toBeInTheDocument()
   })
 
   it('links a selected resource to its page and lists its concepts', async () => {
     const onFocus = renderPanel('item:1')
     expect(screen.getByRole('link', { name: /open resource/i })).toHaveAttribute('href', '/items/abc')
     expect(screen.getByText('en.wikipedia.org')).toBeInTheDocument()
+    expect(screen.getByText('2 connections')).toBeInTheDocument()
+    expect(screen.getByText('Extracted concepts')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /tectonics/i }))
     expect(onFocus).toHaveBeenCalledWith('concept:1')
   })
@@ -43,6 +46,8 @@ describe('GraphPanel', () => {
   it('lists the resources that share a selected concept', () => {
     renderPanel('concept:1')
     expect(screen.getByText('Shared by 2 resources')).toBeInTheDocument()
+    expect(screen.getByText('2', { selector: 'span' })).toBeInTheDocument()
+    expect(screen.getByText('Connected resources')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /earth - wikipedia/i })).toHaveAttribute('href', '/items/abc')
     expect(screen.getByRole('link', { name: /plate tectonics/i })).toHaveAttribute('href', '/items/def')
   })

@@ -87,6 +87,7 @@ describe('flow builders', () => {
   it('lights up lines touching the selection and fades the rest', () => {
     const none = buildFlowEdges(sample, null)
     const picked = buildFlowEdges(sample, 'concept:1')
+    expect(picked[0].type).toBe('default')
     expect(picked.find((e) => e.id === 'e1')?.style?.opacity).toBeGreaterThan(0.9)
     expect(picked.find((e) => e.id === 'e3')?.style?.opacity).toBeLessThan(0.1)
     expect(none.find((e) => e.id === 'e1')?.style?.opacity).toBeGreaterThan(none.find((e) => e.id === 'e3')?.style?.opacity as number)

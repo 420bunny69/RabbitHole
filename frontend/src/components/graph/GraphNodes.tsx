@@ -1,16 +1,8 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
-import { createContext, useContext } from 'react'
+import { useContext } from 'react'
 import { CONCEPT_MAX_WIDTH, type ConceptNodeData, type ItemNodeData } from '../../lib/graph'
 import { SourceLabel } from '../SourceLabel'
-
-/** What is selected, and what is connected to it. Everything else fades back. */
-export type Focus = { selectedId: string | null; related: ReadonlySet<string> }
-export const FocusContext = createContext<Focus>({ selectedId: null, related: new Set() })
-
-function useFaded(id: string): boolean {
-  const { selectedId, related } = useContext(FocusContext)
-  return selectedId !== null && id !== selectedId && !related.has(id)
-}
+import { FocusContext, nodeFocusState } from './GraphFocusContext'
 
 // Lines attach to an invisible point in the middle of each node and are drawn behind it.
 const anchorStyle = { opacity: 0, pointerEvents: 'none', left: '50%', top: '50%' } as const
@@ -25,16 +17,24 @@ function Anchors() {
 }
 
 export function ItemNode({ id, data, selected }: NodeProps<Node<ItemNodeData, 'item'>>) {
-  const faded = useFaded(id)
+  const { faded, matched } = nodeFocusState(id, useContext(FocusContext))
   return (
     <div
-      className={`w-58 rounded-xl border bg-panel px-3.5 py-2.5 text-left transition-opacity ${
-        selected ? 'border-accent ring-1 ring-accent' : 'border-rule hover:border-info'
-      } ${faded ? 'opacity-30' : ''}`}
+      className={`w-[264px] rounded-2xl border bg-panel/95 px-4 py-3 text-left shadow-lg shadow-black/20 transition-[opacity,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-info hover:shadow-xl ${
+        selected
+          ? 'border-accent ring-2 ring-accent/70 shadow-[0_0_24px_color-mix(in_srgb,var(--accent)_18%,transparent)]'
+          : matched
+            ? 'border-info ring-2 ring-info/60'
+            : 'border-rule/90'
+      } ${faded ? 'opacity-20' : ''}`}
     >
       <Anchors />
-      <p className="line-clamp-2 text-sm leading-snug font-semibold text-ink">{data.label}</p>
-      <p className="mt-1 text-xs text-ink-soft">
+      <span className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-soft">
+        <span className="size-1.5 rounded-full bg-burrow shadow-[0_0_8px_color-mix(in_srgb,var(--burrow)_70%,transparent)]" />
+        Resource
+      </span>
+      <p className="line-clamp-2 min-h-10 text-sm leading-snug font-semibold text-ink">{data.label}</p>
+      <p className="mt-2 border-t border-rule/70 pt-2 text-xs text-ink-soft">
         <SourceLabel type={data.sourceType ?? 'article'} />
       </p>
     </div>
@@ -42,19 +42,25 @@ export function ItemNode({ id, data, selected }: NodeProps<Node<ItemNodeData, 'i
 }
 
 export function ConceptNode({ id, data, selected }: NodeProps<Node<ConceptNodeData, 'concept'>>) {
-  const faded = useFaded(id)
+  const { faded, matched } = nodeFocusState(id, useContext(FocusContext))
   const shared = data.count > 1
   return (
     <div
       style={{ maxWidth: CONCEPT_MAX_WIDTH }}
-      className={`flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-opacity ${
-        shared ? 'border-accent/50 bg-accent-soft text-accent' : 'border-rule bg-paper text-ink-soft'
-      } ${selected ? 'ring-2 ring-accent' : ''} ${faded ? 'opacity-30' : ''}`}
+      className={`flex items-center gap-2.5 rounded-full border px-3.5 py-2 text-xs font-medium shadow-md shadow-black/10 transition-[opacity,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 ${
+        shared
+          ? 'border-violet-400/50 bg-violet-950/80 text-violet-200 shadow-violet-950/30 hover:border-violet-300'
+          : 'border-rule bg-panel/90 text-ink-soft hover:border-ink-soft/60'
+      } ${selected ? 'ring-2 ring-accent/80 shadow-[0_0_20px_color-mix(in_srgb,var(--accent)_22%,transparent)]' : ''} ${
+        matched ? 'ring-2 ring-info/60' : ''
+      } ${faded ? 'opacity-20' : ''}`}
     >
       <Anchors />
       <span className="truncate">{data.label}</span>
       {shared && (
-        <span className="rounded-full bg-accent px-1.5 text-xs font-semibold text-on-accent">{data.count}</span>
+        <span className="shrink-0 rounded-full bg-violet-400/20 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-violet-100">
+          {data.count}
+        </span>
       )}
     </div>
   )
