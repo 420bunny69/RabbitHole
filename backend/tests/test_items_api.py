@@ -4,7 +4,7 @@ import pytest
 
 from app import deps
 from app.main import app
-from app.models import Item
+from app.models import Item, UserWorkspace
 from app.services.extractors import web
 from app.services.fetcher import FetchedPage, FetchError
 from tests.samples import ARTICLE_HTML
@@ -143,12 +143,40 @@ def test_anonymous_item_requests_are_rejected(client, authenticated_client):
     assert list_response.status_code == 401
 
 
-def test_authenticated_user_without_mapping_is_forbidden(client, authenticated_client):
-    authenticated_client["identity"]["user_id"] = uuid4()
+def test_authenticated_user_without_mapping_gets_a_private_workspace(client, authenticated_client):
+    user_id = uuid4()
+    authenticated_client["identity"]["user_id"] = user_id
 
     response = client.get("/api/items", headers={"X-Owner-Id": str(authenticated_client["workspace_id"])})
 
-    assert response.status_code == 403
+    assert response.status_code == 200
+    assert response.json() == []
+    with authenticated_client["session_factory"]() as db:
+        mapping = db.get(UserWorkspace, user_id)
+        assert mapping is not None
+        assert mapping.workspace_id != authenticated_client["workspace_id"]
+
+
+def test_existing_workspace_resources_remain_accessible(client, authenticated_client):
+    user_id = authenticated_client["user_id"]
+    workspace_id = authenticated_client["workspace_id"]
+    item = Item(
+        owner_id=workspace_id,
+        source_type="text",
+        title="Migrated resource",
+        raw_text="Existing workspace content",
+        status="ready",
+    )
+    with authenticated_client["session_factory"]() as db:
+        db.add(item)
+        db.commit()
+
+    response = client.get("/api/items")
+
+    assert response.status_code == 200
+    assert [entry["id"] for entry in response.json()] == [str(item.id)]
+    with authenticated_client["session_factory"]() as db:
+        assert db.get(UserWorkspace, user_id).workspace_id == workspace_id
 
 
 # ---- listing, owner isolation, delete, retry --------------------------------------------------
@@ -188,7 +216,9 @@ def test_x_owner_id_cannot_override_mapped_workspace(client, authenticated_clien
         assert db.get(Item, item_id).owner_id == original_workspace_id
 
     authenticated_client["identity"]["user_id"] = uuid4()
-    assert client.get("/api/items", headers={"X-Owner-Id": str(original_workspace_id)}).status_code == 403
+    response = client.get("/api/items", headers={"X-Owner-Id": str(original_workspace_id)})
+    assert response.status_code == 200
+    assert response.json() == []
 
 
 def test_list_is_newest_first_and_searchable(client, owner):

@@ -129,7 +129,7 @@ def test_invalid_requests_are_rejected(client, owner):
     assert client.get("/api/graph", params={"min_items": 0}, headers=owner).status_code == 422
 
 
-def test_anonymous_and_unmapped_users_are_rejected(client, authenticated_client):
+def test_anonymous_is_rejected_and_unmapped_user_gets_private_workspace(client, authenticated_client):
     user_dependency = app.dependency_overrides.pop(deps.get_supabase_user_id)
     try:
         anonymous = client.get("/api/graph", headers={"X-Owner-Id": str(authenticated_client["workspace_id"])})
@@ -137,8 +137,11 @@ def test_anonymous_and_unmapped_users_are_rejected(client, authenticated_client)
         app.dependency_overrides[deps.get_supabase_user_id] = user_dependency
     assert anonymous.status_code == 401
 
-    authenticated_client["identity"]["user_id"] = uuid4()
-    assert client.get("/api/graph").status_code == 403
+    user_id = uuid4()
+    authenticated_client["identity"]["user_id"] = user_id
+    response = client.get("/api/graph")
+    assert response.status_code == 200
+    assert response.json() == {"nodes": [], "edges": [], "truncated": False}
 
 
 def test_graph_excludes_cross_workspace_concept_links(client, authenticated_client, owner):

@@ -7,11 +7,14 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
 from jwt import PyJWKClient
 from jwt.exceptions import PyJWKClientConnectionError, PyJWKClientError
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.models import UserWorkspace
+from app.models import UserWorkspace, Workspace
 
 _bearer_scheme = HTTPBearer(auto_error=False)
 _SUPPORTED_SUPABASE_ALGORITHMS = frozenset({"ES256", "HS256", "RS256"})
@@ -132,9 +135,49 @@ def get_current_workspace_id(
     db: Annotated[Session, Depends(get_db)],
 ) -> UUID:
     user_workspace = db.get(UserWorkspace, user_id)
-    if user_workspace is None:
-        raise HTTPException(status_code=403, detail="No workspace is linked to this account")
-    return user_workspace.workspace_id
+    if user_workspace is not None:
+        return user_workspace.workspace_id
+
+    db.rollback()
+    try:
+        dialect_name = db.get_bind().dialect.name
+        if dialect_name == "postgresql":
+            mapping_insert = postgresql_insert(UserWorkspace)
+        elif dialect_name == "sqlite":
+            mapping_insert = sqlite_insert(UserWorkspace)
+        else:
+            raise HTTPException(status_code=503, detail="Workspace provisioning is unavailable.")
+
+        with db.begin():
+            workspace = Workspace()
+            db.add(workspace)
+            db.flush()
+
+            result = db.execute(
+                mapping_insert
+                .values(user_id=user_id, workspace_id=workspace.id)
+                .on_conflict_do_nothing(index_elements=[UserWorkspace.user_id])
+            )
+
+            if result.rowcount == 0:
+                db.delete(workspace)
+                db.flush()
+            else:
+                return workspace.id
+
+        user_workspace = db.get(UserWorkspace, user_id)
+        if user_workspace is not None:
+            return user_workspace.workspace_id
+        raise HTTPException(status_code=500, detail="Unable to create a workspace.")
+    except IntegrityError:
+        db.rollback()
+        user_workspace = db.get(UserWorkspace, user_id)
+        if user_workspace is not None:
+            return user_workspace.workspace_id
+        raise HTTPException(status_code=500, detail="Unable to create a workspace.") from None
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Unable to create a workspace.") from None
 
 
 CurrentWorkspaceId = Annotated[UUID, Depends(get_current_workspace_id)]

@@ -1,12 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { toApiError } from '../api/client'
-import { checkWorkspaceMapping } from '../api/workspaces'
+import { ensureWorkspace } from '../api/workspaces'
 import { useAuth } from '../contexts/AuthContext'
 import { RouteLoading } from './GuestRoute'
 
 type WorkspaceState =
-  | { userId: string; status: 'checking' | 'linked' | 'missing' }
+  | { userId: string; status: 'checking' | 'ready' }
   | { userId: string; status: 'error'; message: string }
 
 export function ProtectedRoute({
@@ -27,9 +27,9 @@ export function ProtectedRoute({
     const controller = new AbortController()
     setWorkspaceState({ userId, status: 'checking' })
 
-    void checkWorkspaceMapping(controller.signal).then((hasWorkspace) => {
+    void ensureWorkspace(controller.signal).then(() => {
       if (!controller.signal.aborted) {
-        setWorkspaceState({ userId, status: hasWorkspace ? 'linked' : 'missing' })
+        setWorkspaceState({ userId, status: 'ready' })
       }
     }).catch((error: unknown) => {
       if (controller.signal.aborted) return
@@ -46,9 +46,6 @@ export function ProtectedRoute({
   if (requireWorkspace) {
     if (!workspaceState || workspaceState.userId !== user.id || workspaceState.status === 'checking') {
       return <RouteLoading />
-    }
-    if (workspaceState.status === 'missing') {
-      return <Navigate to="/claim-workspace" replace state={{ from: location }} />
     }
     if (workspaceState.status === 'error') {
       return (

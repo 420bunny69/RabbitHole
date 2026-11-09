@@ -106,6 +106,49 @@ def test_missing_authentication_returns_401(claim_client):
     assert response.status_code == 401
 
 
+def test_workspace_endpoint_provisions_once_for_authenticated_user(authenticated_claim_client):
+    client, session_factory = authenticated_claim_client
+
+    first = client.get("/api/workspaces/me")
+    second = client.get("/api/workspaces/me")
+
+    assert first.status_code == second.status_code == 200
+    assert first.json() == second.json()
+    with session_factory() as db:
+        mapping = db.get(UserWorkspace, AUTHENTICATED_USER_ID)
+        assert mapping.workspace_id == UUID(first.json()["workspace_id"])
+        assert len(db.query(Workspace).all()) == 1
+
+
+def test_concurrent_first_requests_create_one_workspace(tmp_path):
+    database_file = tmp_path / "workspace-race.db"
+    engine = create_engine(
+        URL.create("sqlite", database=str(database_file)),
+        connect_args={"timeout": 15, "check_same_thread": False},
+        poolclass=NullPool,
+    )
+    enable_sqlite_foreign_keys(engine)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    user_id = uuid4()
+    barrier = Barrier(2)
+
+    def ensure_workspace():
+        with session_factory() as db:
+            barrier.wait(timeout=10)
+            return deps.get_current_workspace_id(user_id, db)
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            workspace_ids = list(executor.map(lambda _: ensure_workspace(), range(2)))
+        assert workspace_ids[0] == workspace_ids[1]
+        with session_factory() as db:
+            assert db.get(UserWorkspace, user_id).workspace_id == workspace_ids[0]
+            assert len(db.query(Workspace).all()) == 1
+    finally:
+        engine.dispose()
+
+
 def test_invalid_jwt_returns_401(claim_client, monkeypatch):
     client, _ = claim_client
     monkeypatch.setattr(

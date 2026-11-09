@@ -239,15 +239,34 @@ def test_current_workspace_id_returns_authenticated_users_mapping(db_session):
 
     assert response.status_code == 200
     assert UUID(response.json()["workspace_id"]) == workspace.id
+    assert len(db_session.query(Workspace).all()) == 1
 
 
-def test_current_workspace_id_rejects_authenticated_user_without_mapping(db_session):
+def test_current_workspace_id_creates_and_reuses_workspace_for_unmapped_user(db_session):
     user_id = UUID("fe7227cd-165f-4192-ae55-555cdaff0344")
 
     with make_workspace_dependency_client(db_session, user_id) as client:
-        response = client.get("/workspace")
+        first = client.get("/workspace")
+        second = client.get("/workspace")
 
-    assert response.status_code == 403
+    assert first.status_code == second.status_code == 200
+    assert first.json() == second.json()
+    assert db_session.get(UserWorkspace, user_id).workspace_id == UUID(first.json()["workspace_id"])
+    assert len(db_session.query(Workspace).all()) == 1
+
+
+def test_different_users_receive_independent_workspaces(db_session):
+    user_ids = [UUID("d76452be-e18b-4dd7-942a-5d7f32ebdf48"), UUID("46f6c750-fc87-43d6-b244-1bf7f38e36c4")]
+    workspace_ids = []
+
+    for user_id in user_ids:
+        with make_workspace_dependency_client(db_session, user_id) as client:
+            response = client.get("/workspace")
+        assert response.status_code == 200
+        workspace_ids.append(UUID(response.json()["workspace_id"]))
+
+    assert workspace_ids[0] != workspace_ids[1]
+    assert {db_session.get(UserWorkspace, user_id).workspace_id for user_id in user_ids} == set(workspace_ids)
 
 
 def test_current_workspace_id_ignores_client_workspace_values(db_session):

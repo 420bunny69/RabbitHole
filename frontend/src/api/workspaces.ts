@@ -1,22 +1,16 @@
-import { ApiError, request } from './client'
-
-export const NO_WORKSPACE_DETAIL = 'No workspace is linked to this account'
+import { request } from './client'
 
 interface WorkspaceClaimResponse {
   status: 'claimed'
   workspace_id: string
 }
 
-export async function checkWorkspaceMapping(signal?: AbortSignal): Promise<boolean> {
-  try {
-    await request<unknown>('/api/items?limit=1', { signal })
-    return true
-  } catch (error) {
-    if (error instanceof ApiError && error.status === 403 && error.message === NO_WORKSPACE_DETAIL) {
-      return false
-    }
-    throw error
-  }
+interface WorkspaceResponse {
+  workspace_id: string
+}
+
+export async function ensureWorkspace(signal?: AbortSignal): Promise<void> {
+  await request<WorkspaceResponse>('/api/workspaces/me', { signal })
 }
 
 export async function claimWorkspace(claimToken: string): Promise<WorkspaceClaimResponse> {

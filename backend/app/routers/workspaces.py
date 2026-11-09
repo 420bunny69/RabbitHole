@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import SupabaseUserId
+from app.deps import CurrentWorkspaceId, SupabaseUserId
 from app.models import UserWorkspace, Workspace
 from app.schemas import WorkspaceClaimRequest, WorkspaceClaimResponse
 
@@ -42,6 +42,11 @@ router = APIRouter(prefix="/workspaces", tags=["workspaces"], route_class=_Claim
 
 class _ClaimUnavailable(Exception):
     pass
+
+
+@router.get("/me")
+def get_my_workspace(workspace_id: CurrentWorkspaceId) -> dict[str, str]:
+    return {"workspace_id": str(workspace_id)}
 
 
 @router.post("/claim", response_model=WorkspaceClaimResponse)
