@@ -1,157 +1,434 @@
-# RabbitHole
+<div align="center">
 
-RabbitHole is a personal knowledge workspace that turns saved online content into a searchable collection of notes, summaries, concepts, and connected ideas.
+# 🐇 RabbitHole
 
-Instead of leaving useful information scattered across browser tabs, RabbitHole lets you save resources, revisit them in a library, and explore relationships between the ideas they contain.
+**Turn scattered information into connected knowledge.**
+
+An AI-powered personal knowledge management app that converts saved articles, YouTube videos, GitHub repositories, and text into structured, searchable, and interconnected knowledge.
+
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
+
+</div>
+
+---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Architecture](#architecture)
+- [Project Structure](#project-structure)
+- [Getting Started](#getting-started)
+- [Configuration](#configuration)
+- [Authentication and Workspaces](#authentication-and-workspaces)
+- [AI Providers](#ai-providers)
+- [Testing](#testing)
+- [Deployment](#deployment)
+- [Security](#security)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
+
+## Overview
+
+Bookmarking content and never revisiting it is a common failure of personal knowledge tools. RabbitHole closes that gap: it extracts **summaries, key takeaways, and concepts** from everything you save, then connects related ideas through an **interactive knowledge graph**.
+
+Each user gets an independent, private workspace where saved resources and extracted knowledge stay organized and isolated.
 
 ## Features
 
-- **Save resources** from supported URLs and text content.
-- **YouTube transcript extraction** using Supadata, so supported videos can be processed as source material.
-- **Summaries and concept extraction** to make saved material easier to review.
-- **Connected knowledge graph** to explore relationships between concepts from saved resources.
-- **Library** for browsing saved resources.
-- **Resource detail pages** for revisiting the content and its extracted information.
-- **Search and resource management** for finding, retrying, and deleting saved items.
-- **AI provider flexibility** through the configured LLM provider(s), depending on your local environment.
+### Resource ingestion
+- Save articles, YouTube videos, GitHub repositories, and pasted text
+- Automatic source-type detection
+- Content and metadata extraction
+- Processing status tracking: `Pending`, `Processing`, `Ready`, `Failed`
+- Retry for resources that fail during processing
 
-Supported source types and extraction quality depend on the source URL, its availability, and the provider's access to the content. YouTube transcript extraction requires a valid Supadata API key.
+### AI-powered knowledge extraction
+- Concise summaries of saved resources
+- Extraction of key takeaways and important concepts
+- Identification of relationships between concepts
 
-## Tech stack
+### Interactive knowledge graph
+- Visualize relationships between concepts
+- Explore connections across saved resources
+- Discover related ideas rather than browsing isolated bookmarks
 
-### Frontend
-- React
-- TypeScript
-- Vite
+### Personal knowledge library
+- Browse all resources in one place
+- Search by title, URL, and summary
+- Detailed resource pages with personal notes
+- Related resources and extracted concepts at a glance
 
-### Backend
-- Python
-- FastAPI
-- SQLAlchemy
-- SQLite
+### Ask RabbitHole
+- Ask natural-language questions about your saved knowledge
+- Answers grounded in your personal library
+- No need to manually search through every resource
 
-### AI and content extraction
-- Configured LLM provider(s), such as Groq or Ollama
-- Supadata for YouTube transcript retrieval
+### Curiosity Trails
+- Generated exploration paths through your saved knowledge
+- Surface connections between previously saved ideas
+- Topic discovery based on relationships in your knowledge graph
 
-## Project structure
+### Authentication and workspaces
+- Supabase email/password authentication
+- Email verification and expired-link recovery
+- Automatic workspace provisioning for new users
+- Workspace-level data isolation
+- Optional workspace claiming via a claim token
+
+## Tech Stack
+
+| Layer | Technologies |
+|---|---|
+| **Frontend** | React 19, TypeScript, Vite |
+| **Styling** | Tailwind CSS 4 |
+| **Graph Visualization** | XYFlow / React Flow |
+| **Backend** | Python, FastAPI |
+| **ORM** | SQLAlchemy |
+| **Database** | PostgreSQL (production), SQLite (local development) |
+| **Migrations** | Alembic |
+| **Authentication** | Supabase Auth, JWT verification |
+| **AI Integration** | Groq API, Ollama |
+| **Content Extraction** | Trafilatura, custom YouTube transcript extraction |
+| **Testing** | Pytest, Vitest, React Testing Library |
+| **Deployment** | Vercel, Render, Supabase |
+
+## Architecture
+
+```mermaid
+flowchart TD
+    A["React App<br/>(React + TypeScript, Vercel)"] -->|Supabase Auth| B["JWT Bearer Token"]
+    B --> C["FastAPI API<br/>(Render)"]
+    C --> D[("PostgreSQL<br/>Supabase")]
+    C --> E["AI Service<br/>Groq / Ollama"]
+    C --> F["Extractors<br/>Article / YouTube"]
+    E --> G["Knowledge Data<br/>Summaries, Concepts, Relationships"]
+    F --> G
+    G --> D
+```
+
+### Resource processing flow
+
+1. A user submits a URL or text through the frontend.
+2. The backend validates the input and creates a resource.
+3. Content is extracted from the source.
+4. The configured LLM analyzes the extracted content.
+5. Summaries, takeaways, and concepts are generated.
+6. Concepts are stored and linked to their resources.
+7. The frontend displays the processed resource and its connections.
+
+## Project Structure
 
 ```text
 RabbitHole/
-├── backend/       # FastAPI application, database models, routes, and tests
-└── frontend/      # React + TypeScript + Vite application
+├── backend/
+│   ├── app/
+│   │   ├── routers/          # API endpoints
+│   │   ├── services/         # AI, extraction, and processing logic
+│   │   ├── utils/            # Shared utilities
+│   │   ├── models.py         # SQLAlchemy models
+│   │   ├── schemas.py        # Pydantic schemas
+│   │   ├── config.py         # Application configuration
+│   │   ├── database.py       # Database connection
+│   │   ├── deps.py           # Authentication and dependencies
+│   │   └── main.py           # FastAPI application
+│   ├── alembic/versions/     # Database migrations
+│   ├── scripts/              # Utility and migration scripts
+│   ├── tests/                # Backend tests
+│   ├── requirements.txt
+│   └── alembic.ini
+│
+├── frontend/
+│   ├── src/
+│   │   ├── api/              # Backend API clients
+│   │   ├── components/       # Reusable UI components
+│   │   ├── contexts/         # Authentication and app contexts
+│   │   ├── pages/            # Application pages
+│   │   ├── lib/              # Supabase and shared libraries
+│   │   └── test/             # Test configuration
+│   ├── package.json
+│   └── vite.config.ts
+│
+└── README.md
 ```
 
-## Prerequisites
+## Getting Started
 
-Install the following before running the project:
+### Prerequisites
 
-- Python
+- Python 3.11+
 - Node.js and npm
 - Git
+- A [Supabase](https://supabase.com) project
+- A [Groq](https://groq.com) API key **or** a running [Ollama](https://ollama.com) instance
+- A [Supadata](https://supadata.ai) API key (for YouTube transcript extraction)
 
-You will also need the API keys required by the providers you have enabled. Keep secrets in local environment files and never commit them to Git.
+### 1. Clone the repository
 
-## Configuration
+```bash
+git clone https://github.com/420bunny69/RabbitHole.git
+cd RabbitHole
+```
 
-1. Open the `backend` directory.
-2. Create or update the environment file expected by the backend.
-3. Add the API keys and provider settings required by your current configuration, including the Supadata key for YouTube transcripts.
-4. Confirm that the backend loads the environment variables before making provider requests.
-
-**Important:** Use the variable names already expected by the codebase. Do not rename environment variables just to match this README. Never commit real API keys or `.env` files.
-
-## Run locally on Windows
-
-Open two separate PowerShell terminals from the project directory.
-
-### 1. Start the backend
+### 2. Backend setup
 
 ```powershell
-cd D:\RabbitHole\backend
-..\.venv\Scripts\Activate.ps1
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+Create a `.env` file in `backend/` (see [Configuration](#configuration)), then apply migrations and start the server:
+
+```powershell
+alembic upgrade head
 python -m uvicorn app.main:app --reload
 ```
 
-The API should be available at:
+| Service | URL |
+|---|---|
+| API | http://127.0.0.1:8000 |
+| Swagger docs | http://127.0.0.1:8000/docs |
+| Health check | http://127.0.0.1:8000/api/health |
 
-- API: http://127.0.0.1:8000
-- Interactive API docs: http://127.0.0.1:8000/docs
+### 3. Frontend setup
 
-If your virtual environment is located inside `backend` instead of the project root, activate it with:
+In a new terminal:
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
+cd frontend
+npm install
 ```
 
-Use the activation path that matches your actual environment.
+Create a `.env.local` file in `frontend/`:
 
-### 2. Start the frontend
+```env
+VITE_API_URL=
+VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+VITE_SUPABASE_ANON_KEY=your_supabase_publishable_or_anon_key
+```
 
-In a second terminal:
+> For local development, leave `VITE_API_URL` empty. Vite proxies `/api` requests to `http://127.0.0.1:8000`.
 
 ```powershell
-cd D:\RabbitHole\frontend
-npm install
 npm run dev
 ```
 
-Vite prints the local frontend URL in the terminal, usually http://localhost:5173.
+Open the URL printed by Vite (usually http://localhost:5173).
+
+## Configuration
+
+### Backend environment variables (`backend/.env`)
+
+```env
+APP_NAME=RabbitHole API
+
+# Database
+DATABASE_URL=sqlite:///./rabbithole.db
+
+# Supabase JWT authentication
+SUPABASE_JWT_ISSUER=https://YOUR_PROJECT_REF.supabase.co/auth/v1
+SUPABASE_JWT_AUDIENCE=authenticated
+SUPABASE_JWT_ALGORITHM=ES256
+
+# CORS
+CORS_ORIGINS=http://localhost:5173
+
+# AI configuration
+LLM_PROVIDER=groq
+GROQ_API_KEY=your_groq_api_key
+GROQ_MODEL=openai/gpt-oss-120b
+
+# YouTube transcript extraction
+SUPADATA_API_KEY=your_supadata_api_key
+```
+
+| Variable | Notes |
+|---|---|
+| `DATABASE_URL` | Defaults to SQLite locally. For PostgreSQL, use a SQLAlchemy-compatible URL such as `postgresql+psycopg://...` |
+| `SUPABASE_JWT_ISSUER` | Must match your Supabase project's Auth issuer |
+| `SUPABASE_JWT_ALGORITHM` | Must match the algorithm of your Supabase JWT signing keys (example uses `ES256`) |
+| `CORS_ORIGINS` | Comma-separated list of allowed frontend origins |
+| `GROQ_MODEL` | Must be a model currently available to your Groq account |
+
+> ⚠️ Keep all API keys and database credentials private. Never commit `.env` files.
+
+## Authentication and Workspaces
+
+RabbitHole uses Supabase Auth for registration and login.
+
+1. A user registers with an email address and password.
+2. Supabase sends an email verification link.
+3. After verification, the user can log in.
+4. The frontend obtains a Supabase access token.
+5. The backend verifies the JWT signature and claims.
+6. The backend identifies the authenticated Supabase user.
+7. If the user has no workspace, an independent workspace is provisioned automatically.
+8. Subsequent requests use the existing workspace.
+
+**Workspace isolation.** Each authenticated user is linked to one workspace through the `user_workspaces` table. The backend derives identity from the verified JWT and never trusts a user ID sent by the frontend. Resources and concepts are scoped to their workspace, so users cannot access another user's data through the standard API.
+
+### Database migrations
+
+```powershell
+cd backend
+alembic upgrade head   # apply migrations
+alembic current        # inspect current revision
+```
+
+> ⚠️ Do not run the SQLite-to-PostgreSQL data migration script against an already populated production database. It is a one-time utility, not part of normal application startup.
+
+## AI Providers
+
+RabbitHole supports two LLM providers, selected with `LLM_PROVIDER`.
+
+### Groq (hosted)
+
+```env
+LLM_PROVIDER=groq
+GROQ_API_KEY=your_api_key
+GROQ_MODEL=your_available_model
+```
+
+### Ollama (local)
+
+```env
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.1
+```
+
+```bash
+ollama pull llama3.1
+```
+
+Ensure the Ollama service is running before using the application.
 
 ## Testing
 
-### Backend
-
-From the `backend` directory, with the project's virtual environment activated:
+**Backend** (from `backend/`):
 
 ```powershell
 python -m pytest
 ```
 
-### Frontend
-
-From the `frontend` directory:
+For PostgreSQL integration tests, use an isolated test database:
 
 ```powershell
-npm test
+$env:DATABASE_URL = "postgresql+psycopg://postgres@localhost:5432/rabbithole_test"
+$env:PGPASSFILE = "$env:APPDATA\postgresql\pgpass.conf"
+python -m pytest -v
 ```
 
-To create a production build:
+> ⚠️ Never run integration tests against production data.
 
-```powershell
-npm run build
+**Frontend** (from `frontend/`):
+
+```bash
+npm test            # unit and component tests
+npm run lint        # linting
+npm run build       # production build
 ```
 
-Run the tests and build again after making changes. A passing test suite does not replace a manual end-to-end check of saving a source, opening it, and verifying its extracted content and graph connections.
+## Deployment
 
-## Typical workflow
+Production uses three services:
 
-1. Start the backend and frontend.
-2. Add a supported URL or text resource.
-3. Let RabbitHole retrieve the source content and process it.
-4. Open the saved item to review its summary and extracted concepts.
-5. Browse the library and explore the connected knowledge graph.
+| Service | Responsibility |
+|---|---|
+| **Vercel** | Frontend hosting |
+| **Render** | FastAPI backend hosting |
+| **Supabase** | PostgreSQL database and authentication |
 
-For YouTube, transcript retrieval must succeed before the video can be processed reliably. If it fails, check that the Supadata key is present in the backend environment, that the key is valid, and that the video has an accessible transcript.
+### Frontend (Vercel)
 
-## Current scope
+| Setting | Value |
+|---|---|
+| Root directory | `frontend` |
+| Framework | Vite |
+| Install command | `npm install` |
+| Build command | `npm run build` |
+| Output directory | `dist` |
 
-RabbitHole is currently documented as a **single-user workspace**. Account registration, login, and multi-user data isolation are not included in this README's feature set.
+```env
+VITE_API_URL=https://YOUR_BACKEND_URL
+VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+VITE_SUPABASE_ANON_KEY=your_publishable_or_anon_key
+```
 
-## Security notes
+### Backend (Render)
 
-- Do not commit API keys, access tokens, or local `.env` files.
-- Keep provider credentials on the backend; do not expose secret keys in frontend code.
-- Treat extracted summaries and concepts as AI-generated interpretations and verify important details against the original source.
+| Setting | Value |
+|---|---|
+| Root directory | `backend` |
+| Build command | `pip install -r requirements.txt` |
+| Start command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
 
-## Contributing / development
+Required environment variables: `DATABASE_URL`, `SUPABASE_JWT_ISSUER`, `SUPABASE_JWT_AUDIENCE`, `SUPABASE_JWT_ALGORITHM`, `GROQ_API_KEY`, `GROQ_MODEL`, `SUPADATA_API_KEY`, `CORS_ORIGINS`.
 
-1. Create a branch for your change.
-2. Make the smallest focused change possible.
-3. Run the relevant backend and frontend tests.
-4. Run the frontend production build.
-5. Manually verify the affected workflow before merging.
+Apply database migrations **before** deploying changes that depend on a new schema.
+
+### Supabase
+
+1. Provision the PostgreSQL database and connection credentials.
+2. Enable email/password authentication.
+3. Enable email verification.
+4. Set the Site URL to the production frontend.
+5. Add allowed redirect URLs for production and local development.
+
+Use the Supabase session pooler (or another supported PostgreSQL connection method) for hosted backend access.
+
+## Security
+
+- Authentication enforced through verified Supabase JWTs
+- Workspace ownership derived from the authenticated user, not client input
+- Idempotent workspace provisioning backed by database uniqueness constraints
+- CORS restricted to explicit allowed origins
+- Database access scoped by workspace ownership
+- Public URL validation during extraction to reduce SSRF risk
+- Secrets kept in backend environment variables only
+- Frontend uses only the Supabase publishable/anon key, never the service-role key
+
+## Roadmap
+
+- [ ] Richer knowledge graph exploration and filtering
+- [ ] Improved semantic search across saved resources
+- [ ] Additional source integrations
+- [ ] Better resource processing observability
+- [ ] Background job infrastructure for reliable large-scale processing
+- [ ] Workspace export and backup
+- [ ] Collaborative workspaces and shared knowledge collections
+
+## Contributing
+
+Contributions and suggestions are welcome.
+
+1. Fork the repository
+2. Create a feature branch
+3. Make focused changes
+4. Add or update tests
+5. Run backend and frontend tests
+6. Verify the frontend production build
+7. Open a pull request with a clear description
+
+## License
+
+No license is currently specified. All rights remain with the repository owner unless a license is added.
 
 ---
 
-Built to help turn browsing into connected understanding.
+<div align="center">
+
+**RabbitHole: don't just save information. Connect it.**
+
+</div>
