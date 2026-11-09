@@ -12,9 +12,15 @@ import { NotFound } from './pages/NotFound'
 import { RecentPage } from './pages/RecentPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { TopicsPage } from './pages/TopicsPage'
+import { VerificationLinkErrorPage } from './pages/VerificationLinkErrorPage'
 import { WorkspaceClaimPage } from './pages/WorkspaceClaimPage'
+import { useAuth } from './contexts/AuthContext'
 
 export default function App() {
+  const { verificationLinkExpired } = useAuth()
+
+  if (verificationLinkExpired) return <VerificationLinkErrorPage />
+
   return (
     <Routes>
       <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />

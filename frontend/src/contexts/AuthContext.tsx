@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import type { AuthError, AuthResponse, Session, User } from '@supabase/supabase-js'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import type { AuthError, AuthOtpResponse, AuthResponse, Session, User } from '@supabase/supabase-js'
 import {
   requireSupabaseClient,
   supabase,
@@ -11,18 +11,65 @@ interface AuthContextValue {
   user: User | null
   loading: boolean
   configurationError: string | null
+  verificationLinkExpired: boolean
+  clearVerificationLinkExpired: () => void
   signInWithPassword: (email: string, password: string) => Promise<AuthResponse>
   signUp: (email: string, password: string) => Promise<AuthResponse>
+  resendSignupVerification: (email: string) => Promise<AuthOtpResponse>
   signOut: () => Promise<{ error: AuthError | null }>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
+function hasExpiredVerificationError(): boolean {
+  if (typeof window === 'undefined') return false
+  const hashParams = new URLSearchParams(window.location.hash.slice(1))
+  const searchParams = new URLSearchParams(window.location.search)
+  const error = hashParams.get('error') ?? searchParams.get('error')
+  const errorCode = hashParams.get('error_code') ?? searchParams.get('error_code')
+  const description =
+    hashParams.get('error_description') ?? searchParams.get('error_description') ?? ''
+
+  return (
+    error === 'access_denied' ||
+    errorCode === 'access_denied' ||
+    errorCode === 'otp_expired' ||
+    /(?:otp|verification).{0,30}expired|expired.{0,30}(?:otp|verification)/i.test(description)
+  )
+}
+
+function cleanVerificationErrorFromUrl(): void {
+  const url = new URL(window.location.href)
+  for (const key of [
+    'access_token',
+    'code',
+    'error',
+    'error_code',
+    'error_description',
+    'error_uri',
+    'expires_at',
+    'expires_in',
+    'provider_refresh_token',
+    'provider_token',
+    'refresh_token',
+    'token_hash',
+    'token_type',
+    'type',
+  ]) {
+    url.searchParams.delete(key)
+  }
+  url.hash = ''
+  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}`)
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
-  const [loading, setLoading] = useState(supabase !== null)
+  const [verificationLinkExpired, setVerificationLinkExpired] = useState(hasExpiredVerificationError)
+  const hadExpiredVerificationLink = useRef(verificationLinkExpired)
+  const [loading, setLoading] = useState(() => supabase !== null && !hasExpiredVerificationError())
 
   useEffect(() => {
+    if (hadExpiredVerificationLink.current) cleanVerificationErrorFromUrl()
     if (!supabase) {
       setLoading(false)
       return
@@ -53,6 +100,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  function clearVerificationLinkExpired(): void {
+    setVerificationLinkExpired(false)
+  }
+
   async function signInWithPassword(email: string, password: string): Promise<AuthResponse> {
     const result = await requireSupabaseClient().auth.signInWithPassword({ email, password })
     if (!result.error) setSession(result.data.session)
@@ -63,6 +114,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await requireSupabaseClient().auth.signUp({ email, password })
     if (!result.error) setSession(result.data.session)
     return result
+  }
+
+  async function resendSignupVerification(email: string): Promise<AuthOtpResponse> {
+    return requireSupabaseClient().auth.resend({ type: 'signup', email })
   }
 
   async function signOut(): Promise<{ error: AuthError | null }> {
@@ -76,8 +131,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: session?.user ?? null,
     loading,
     configurationError: supabaseConfigurationError?.message ?? null,
+    verificationLinkExpired,
+    clearVerificationLinkExpired,
     signInWithPassword,
     signUp,
+    resendSignupVerification,
     signOut,
   }
 

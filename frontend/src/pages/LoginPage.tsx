@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AuthPanel } from '../components/AuthPanel'
 import { useAuth } from '../contexts/AuthContext'
-import { readableAuthError } from '../lib/authError'
+import { isEmailNotConfirmedError, readableAuthError } from '../lib/authError'
 
 interface ReturnLocation {
   pathname?: string
@@ -11,13 +11,19 @@ interface ReturnLocation {
 }
 
 export function LoginPage() {
-  const { signInWithPassword } = useAuth()
+  const { signInWithPassword, resendSignupVerification } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
+  const verificationLinkExpiredFromState =
+    (location.state as { verificationLinkExpired?: boolean } | null)?.verificationLinkExpired ?? false
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [verificationRequired, setVerificationRequired] = useState(verificationLinkExpiredFromState)
+  const [resending, setResending] = useState(false)
+  const [resendMessage, setResendMessage] = useState('')
+  const [resendError, setResendError] = useState('')
   const from = (location.state as { from?: ReturnLocation } | null)?.from
   const returnTo = from?.pathname?.startsWith('/') && !from.pathname.startsWith('//')
     ? `${from.pathname}${from.search ?? ''}${from.hash ?? ''}`
@@ -26,11 +32,19 @@ export function LoginPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setErrorMessage('')
+    setResendMessage('')
+    setResendError('')
     setSubmitting(true)
     try {
       const { data, error } = await signInWithPassword(email.trim(), password)
       if (error) {
-        setErrorMessage(readableAuthError(error))
+        if (isEmailNotConfirmedError(error)) {
+          setVerificationRequired(true)
+          setErrorMessage('Your email address is not verified. Resend a verification email to continue.')
+        } else {
+          setVerificationRequired(false)
+          setErrorMessage(readableAuthError(error))
+        }
       } else if (data.session) {
         navigate(returnTo, { replace: true })
       } else {
@@ -40,6 +54,26 @@ export function LoginPage() {
       setErrorMessage(readableAuthError(error))
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  async function handleResendVerification() {
+    setResendMessage('')
+    setResendError('')
+    if (!email.trim()) {
+      setResendError('Enter your email address above first.')
+      return
+    }
+
+    setResending(true)
+    try {
+      const { error } = await resendSignupVerification(email.trim())
+      if (error) setResendError(readableAuthError(error))
+      else setResendMessage('Verification email sent. Check your inbox.')
+    } catch (error) {
+      setResendError(readableAuthError(error))
+    } finally {
+      setResending(false)
     }
   }
 
@@ -60,6 +94,25 @@ export function LoginPage() {
             className="w-full rounded-md border border-rule bg-paper px-3 py-2.5 text-ink placeholder:text-ink-soft focus:border-accent focus:outline-none"
           />
         </label>
+        {verificationRequired && (
+          <div className="space-y-2">
+            {verificationLinkExpiredFromState && (
+              <p role="status" className="text-sm text-burrow">
+                That verification link has expired. Enter your email address and request a new one.
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => void handleResendVerification()}
+              disabled={resending}
+              className="text-sm font-semibold text-burrow underline disabled:cursor-wait disabled:opacity-60"
+            >
+              {resending ? 'Sending verification email...' : 'Resend verification email'}
+            </button>
+            {resendMessage && <p role="status" className="text-sm text-burrow">{resendMessage}</p>}
+            {resendError && <p role="alert" className="text-sm text-danger">{resendError}</p>}
+          </div>
+        )}
         <label className="block space-y-1.5 text-sm font-medium">
           <span>Password</span>
           <input
