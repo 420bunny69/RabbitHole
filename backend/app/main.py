@@ -13,9 +13,13 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origin_list,
+        allow_origins=[
+            *settings.cors_origin_list,
+            "https://rabbithole-eddqxgey7-420bunny69s-projects.vercel.app",
+        ],
         allow_methods=["*"],
         allow_headers=["*"],  # includes our custom X-Owner-Id header
+        allow_credentials=True,
     )
 
     # Every route lives under /api. New routers get added here.
