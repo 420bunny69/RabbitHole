@@ -15,6 +15,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=[
             *settings.cors_origin_list,
+            "https://rabbithole-git-main-420bunny69s-projects.vercel.app",
             "https://rabbithole-eddqxgey7-420bunny69s-projects.vercel.app",
         ],
         allow_methods=["*"],

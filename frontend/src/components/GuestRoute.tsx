@@ -1,12 +1,17 @@
 import type { ReactNode } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 export function GuestRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
+  const location = useLocation()
+  const from = (location.state as { from?: { pathname?: string; search?: string; hash?: string } } | null)?.from
+  const returnTo = from?.pathname?.startsWith('/') && !from.pathname.startsWith('//')
+    ? `${from.pathname}${from.search ?? ''}${from.hash ?? ''}`
+    : '/'
 
   if (loading) return <RouteLoading />
-  if (user) return <Navigate to="/" replace />
+  if (user) return <Navigate to={returnTo} replace />
   return children
 }
 

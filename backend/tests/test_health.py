@@ -35,20 +35,24 @@ def test_cors_allows_frontend_origin_and_owner_header(client):
 
 
 def test_cors_allows_production_frontend_with_credentials(client):
-    origin = "https://rabbithole-eddqxgey7-420bunny69s-projects.vercel.app"
     requested_headers = "authorization,content-type,x-owner-id"
-    response = client.options(
-        "/api/items",
-        headers={
-            "Origin": origin,
-            "Access-Control-Request-Method": "POST",
-            "Access-Control-Request-Headers": requested_headers,
-        },
-    )
 
-    assert response.status_code == 200
-    assert response.headers["access-control-allow-origin"] == origin
-    assert response.headers["access-control-allow-credentials"] == "true"
-    assert "POST" in response.headers["access-control-allow-methods"]
-    allowed_headers = response.headers["access-control-allow-headers"].lower()
-    assert all(header in allowed_headers for header in requested_headers.split(","))
+    for origin in (
+        "https://rabbithole-git-main-420bunny69s-projects.vercel.app",
+        "https://rabbithole-eddqxgey7-420bunny69s-projects.vercel.app",
+    ):
+        response = client.options(
+            "/api/items",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": requested_headers,
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.headers["access-control-allow-origin"] == origin
+        assert response.headers["access-control-allow-credentials"] == "true"
+        assert "POST" in response.headers["access-control-allow-methods"]
+        allowed_headers = response.headers["access-control-allow-headers"].lower()
+        assert all(header in allowed_headers for header in requested_headers.split(","))

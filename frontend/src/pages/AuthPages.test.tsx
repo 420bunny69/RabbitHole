@@ -60,6 +60,21 @@ describe('authentication pages', () => {
     expect(screen.queryByText('Application home')).not.toBeInTheDocument()
   })
 
+  it('offers the explicit workspace claim flow from login and registration', () => {
+    const { unmount } = renderAuthPage('login')
+    expect(screen.getByRole('link', { name: 'Link an existing workspace' })).toHaveAttribute(
+      'href',
+      '/claim-workspace',
+    )
+
+    unmount()
+    renderAuthPage('register')
+    expect(screen.getByRole('link', { name: 'Link an existing workspace' })).toHaveAttribute(
+      'href',
+      '/claim-workspace',
+    )
+  })
+
   it('navigates only when registration returns an active session', async () => {
     const user = userEvent.setup()
     authPageMocks.signUp.mockResolvedValue({ data: { session: { access_token: 'token' } }, error: null })

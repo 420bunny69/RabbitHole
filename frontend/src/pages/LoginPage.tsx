@@ -80,7 +80,13 @@ export function LoginPage() {
   return (
     <AuthPanel
       title="Welcome back"
-      footer={<>New to RabbitHole? <Link to="/register" className="font-semibold text-burrow hover:underline">Create an account</Link></>}
+      footer={(
+        <>
+          New to RabbitHole? <Link to="/register" state={location.state} className="font-semibold text-burrow hover:underline">Create an account</Link>
+          <br />
+          Have a workspace claim token? <Link to="/claim-workspace" className="font-semibold text-burrow hover:underline">Link an existing workspace</Link>
+        </>
+      )}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <label className="block space-y-1.5 text-sm font-medium">

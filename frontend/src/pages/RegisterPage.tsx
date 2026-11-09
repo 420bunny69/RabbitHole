@@ -39,7 +39,13 @@ export function RegisterPage() {
   return (
     <AuthPanel
       title="Create your account"
-      footer={<>Already registered? <Link to="/login" className="font-semibold text-burrow hover:underline">Sign in</Link></>}
+      footer={(
+        <>
+          Already registered? <Link to="/login" state={location.state} className="font-semibold text-burrow hover:underline">Sign in</Link>
+          <br />
+          Have a workspace claim token? <Link to="/claim-workspace" className="font-semibold text-burrow hover:underline">Link an existing workspace</Link>
+        </>
+      )}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <label className="block space-y-1.5 text-sm font-medium">
