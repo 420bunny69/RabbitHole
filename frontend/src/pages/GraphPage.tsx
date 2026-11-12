@@ -16,7 +16,7 @@ export function GraphPage() {
   const sharedConcepts = data?.nodes.filter((node) => node.type === 'concept' && (node.count ?? 0) > 1).length ?? 0
 
   return (
-    <div className="relative left-1/2 flex min-h-0 w-[calc(100vw-2rem)] -translate-x-1/2 flex-1 flex-col gap-5 sm:w-[calc(100vw-4rem)] md:w-[calc(100vw-20rem)] lg:w-[calc(100vw-22rem)]">
+    <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col gap-5 md:relative md:left-1/2 md:w-[calc(100vw-20rem)] md:-translate-x-1/2 lg:w-[calc(100vw-22rem)]">
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Your ideas, mapped</p>

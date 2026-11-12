@@ -6,6 +6,7 @@ import {
   Panel,
   ReactFlow,
   ReactFlowProvider,
+  useNodesInitialized,
   useNodesState,
   useReactFlow,
   type NodeTypes,
@@ -39,6 +40,7 @@ function Canvas({ data }: { data: GraphData }) {
   const [fullscreenError, setFullscreenError] = useState('')
   const canvasRef = useRef<HTMLDivElement>(null)
   const { fitView } = useReactFlow()
+  const nodesInitialized = useNodesInitialized()
 
   const edges = useMemo(() => buildFlowEdges(data, selectedId), [data, selectedId])
   const matchingNodes = useMemo(() => {
@@ -68,8 +70,54 @@ function Canvas({ data }: { data: GraphData }) {
   }, [])
 
   const fitGraph = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return false
+    const { width, height } = canvas.getBoundingClientRect()
+    if (width === 0 || height === 0) return false
     void fitView({ duration: 350, padding: 0.22, maxZoom: 1.15, minZoom: 0.1 })
+    return true
   }, [fitView])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!nodesInitialized || !canvas) return
+
+    let frame = 0
+    let initialFitComplete = false
+    let orientationFitPending = false
+    const scheduleFit = (orientationChanged = false) => {
+      orientationFitPending ||= orientationChanged
+      if (frame) cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        frame = 0
+        if (initialFitComplete && !orientationFitPending) return
+        if (fitGraph()) {
+          initialFitComplete = true
+          orientationFitPending = false
+        }
+      })
+    }
+
+    const observer = new ResizeObserver(() => {
+      if (!initialFitComplete || orientationFitPending) scheduleFit()
+    })
+    const orientation = window.matchMedia('(orientation: portrait)')
+    let wasPortrait = orientation.matches
+    const handleOrientationChange = () => {
+      if (orientation.matches === wasPortrait) return
+      wasPortrait = orientation.matches
+      scheduleFit(true)
+    }
+
+    observer.observe(canvas)
+    orientation.addEventListener('change', handleOrientationChange)
+    scheduleFit()
+    return () => {
+      observer.disconnect()
+      orientation.removeEventListener('change', handleOrientationChange)
+      if (frame) cancelAnimationFrame(frame)
+    }
+  }, [fitGraph, nodesInitialized])
 
   const focusNode = useCallback(
     (id: string) => {
@@ -102,7 +150,7 @@ function Canvas({ data }: { data: GraphData }) {
     <div className="flex min-h-0 flex-1 flex-col gap-4 xl:flex-row">
       <div
         ref={canvasRef}
-        className="knowledge-graph-canvas relative h-[min(72vh,820px)] min-h-[520px] min-w-0 flex-1 overflow-hidden rounded-2xl border border-rule/80 bg-paper shadow-xl shadow-black/15"
+        className="knowledge-graph-canvas relative h-[min(62dvh,720px)] min-h-[min(360px,58dvh)] min-w-0 flex-1 overflow-hidden rounded-2xl border border-rule/80 bg-paper shadow-xl shadow-black/15 sm:h-[min(72vh,820px)] sm:min-h-[520px]"
       >
         <FocusContext.Provider value={focus}>
           <ReactFlow
@@ -112,8 +160,8 @@ function Canvas({ data }: { data: GraphData }) {
             onNodesChange={onNodesChange}
             onSelectionChange={onSelectionChange}
             colorMode="dark"
-            fitView
-            fitViewOptions={{ padding: 0.22, maxZoom: 1.15, minZoom: 0.1 }}
+            panOnDrag
+            zoomOnPinch
             minZoom={0.1}
             maxZoom={1.8}
             deleteKeyCode={null}

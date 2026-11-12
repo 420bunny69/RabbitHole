@@ -106,6 +106,12 @@ body {
     radial-gradient(ellipse at 85% 90%, color-mix(in srgb, var(--burrow) 5%, transparent), transparent 34%);
 }
 
+@media (orientation: landscape) and (max-height: 600px) and (max-width: 1023px) {
+  .knowledge-graph-canvas:not(:fullscreen) {
+    min-height: min(520px, 58dvh);
+  }
+}
+
 .knowledge-graph-canvas:fullscreen {
   width: 100vw;
   height: 100dvh;
