@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🐇 RabbitHole
+# RabbitHole
 
 **Turn scattered information into connected knowledge.**
 
